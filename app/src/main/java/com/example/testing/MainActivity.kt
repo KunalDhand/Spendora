@@ -158,8 +158,8 @@ class MainActivity : ComponentActivity() {
             val themeState by themeViewModel.themeState.collectAsStateWithLifecycle()
 
             val isDarkTheme = when (val state = themeState) {
-                is ThemeLoadState.Loading -> androidx.compose.foundation.isSystemInDarkTheme()
-                is ThemeLoadState.Ready -> state.isDark ?: androidx.compose.foundation.isSystemInDarkTheme()
+                is ThemeLoadState.Loading -> false
+                is ThemeLoadState.Ready -> state.isDark ?: false
             }
 
             TestingTheme(darkTheme = isDarkTheme) {
