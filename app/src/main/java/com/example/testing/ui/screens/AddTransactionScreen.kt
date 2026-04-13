@@ -67,6 +67,7 @@ fun AddTransactionScreen(
     
     var categoryExpanded by remember { mutableStateOf(false) }
     var selectedCategory by remember { mutableStateOf<CategoryEntity?>(null) }
+    var showAddCategoryDialog by remember { mutableStateOf(false) }
 
     var personExpanded by remember { mutableStateOf(false) }
     var selectedPerson by remember { mutableStateOf<PersonEntity?>(null) }
@@ -119,6 +120,46 @@ fun AddTransactionScreen(
             false
         ).show()
         showTimePicker = false
+    }
+
+    if (showAddCategoryDialog) {
+        var newCategoryName by remember { mutableStateOf("") }
+        AlertDialog(
+            onDismissRequest = { showAddCategoryDialog = false },
+            title = { Text("Create New Category", fontWeight = FontWeight.ExtraBold) },
+            text = {
+                OutlinedTextField(
+                    value = newCategoryName,
+                    onValueChange = { newCategoryName = it },
+                    label = { Text("Category Name (e.g. Health)") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = MaterialTheme.colorScheme.primary,
+                        unfocusedBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+                    )
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        if (newCategoryName.isNotBlank()) {
+                            categoryViewModel.addCategory(newCategoryName)
+                            showAddCategoryDialog = false
+                        }
+                    },
+                    shape = RoundedCornerShape(12.dp)
+                ) { Text("Add", fontWeight = FontWeight.Bold) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showAddCategoryDialog = false }) { 
+                    Text("Cancel", color = MaterialTheme.colorScheme.onSurfaceVariant) 
+                }
+            },
+            shape = RoundedCornerShape(28.dp),
+            containerColor = MaterialTheme.colorScheme.surface
+        )
     }
 
     if (showAddPersonDialog) {
@@ -288,6 +329,14 @@ fun AddTransactionScreen(
                             }
                         )
                     }
+                    HorizontalDivider()
+                    DropdownMenuItem(
+                        text = { Text("+ Add New") },
+                        onClick = {
+                            showAddCategoryDialog = true
+                            categoryExpanded = false
+                        }
+                    )
                 }
             }
         }
