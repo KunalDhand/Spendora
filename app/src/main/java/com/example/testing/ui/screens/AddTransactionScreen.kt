@@ -3,13 +3,29 @@ package com.example.testing.ui.screens
 import android.app.DatePickerDialog
 import android.app.TimePickerDialog
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AddCircle
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -385,72 +401,117 @@ fun AddTransactionScreen(
         }
 
         // Tags Multi-Select
-        Box(modifier = Modifier.fillMaxWidth()) {
-            Surface(
-                onClick = { tagExpanded = true },
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(16.dp),
-                color = MaterialTheme.colorScheme.surface,
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.15f))
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text("Tags", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
-                    if (selectedTags.isEmpty()) {
-                        Text("Select Tags (Optional)", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
-                    } else {
-                        LazyRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                            items(selectedTags) { tag ->
-                                Surface(
-                                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
-                                    shape = RoundedCornerShape(8.dp),
-                                    modifier = Modifier.padding(vertical = 4.dp)
-                                ) {
-                                    Text(
-                                        text = tag.name,
-                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                                        style = MaterialTheme.typography.labelMedium,
-                                        fontWeight = FontWeight.Bold,
-                                        color = MaterialTheme.colorScheme.primary
-                                    )
-                                }
+        Surface(
+            onClick = { tagExpanded = true },
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(16.dp),
+            color = MaterialTheme.colorScheme.surface,
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.15f))
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text("Tags", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                if (selectedTags.isEmpty()) {
+                    Text("Select Tags (Optional)", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
+                } else {
+                    FlowRow(
+                        modifier = Modifier.padding(top = 8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        selectedTags.forEach { tag ->
+                            Surface(
+                                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
+                                shape = RoundedCornerShape(8.dp)
+                            ) {
+                                Text(
+                                    text = tag.name,
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
                             }
                         }
                     }
                 }
             }
+        }
 
-            DropdownMenu(
-                expanded = tagExpanded,
+        if (tagExpanded) {
+            ModalBottomSheet(
                 onDismissRequest = { tagExpanded = false },
-                modifier = Modifier.fillMaxWidth(0.9f)
+                containerColor = MaterialTheme.colorScheme.surface,
+                shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+                tonalElevation = 0.dp
             ) {
-                allTags.forEach { tag ->
-                    val isSelected = selectedTags.any { it.id == tag.id }
-                    DropdownMenuItem(
-                        text = {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Checkbox(checked = isSelected, onCheckedChange = null)
-                                Spacer(Modifier.width(8.dp))
-                                Text(tag.name)
-                            }
-                        },
-                        onClick = {
-                            if (isSelected) {
-                                selectedTags.removeAll { it.id == tag.id }
-                            } else {
-                                selectedTags.add(tag)
-                            }
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 24.dp)
+                        .padding(bottom = 40.dp),
+                    verticalArrangement = Arrangement.spacedBy(24.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("Select Tags", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.ExtraBold)
+                        TextButton(
+                            onClick = { showAddTagDialog = true },
+                            contentPadding = PaddingValues(0.dp)
+                        ) {
+                            Icon(Icons.Default.AddCircle, contentDescription = null, modifier = Modifier.size(20.dp))
+                            Spacer(Modifier.width(4.dp))
+                            Text("New Tag", fontWeight = FontWeight.Bold)
                         }
-                    )
-                }
-                HorizontalDivider()
-                DropdownMenuItem(
-                    text = { Text("+ Add New Tag") },
-                    onClick = {
-                        showAddTagDialog = true
-                        tagExpanded = false
                     }
-                )
+
+                    FlowRow(
+                        modifier = Modifier.fillMaxWidth().heightIn(max = 300.dp).verticalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        allTags.forEach { tag ->
+                            val isSelected = selectedTags.any { it.id == tag.id }
+                            FilterChip(
+                                selected = isSelected,
+                                onClick = {
+                                    if (isSelected) {
+                                        selectedTags.removeAll { it.id == tag.id }
+                                    } else {
+                                        selectedTags.add(tag)
+                                    }
+                                },
+                                label = { Text(tag.name) },
+                                shape = RoundedCornerShape(12.dp),
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = MaterialTheme.colorScheme.primary,
+                                    selectedLabelColor = Color.White,
+                                    containerColor = MaterialTheme.colorScheme.surface,
+                                    labelColor = MaterialTheme.colorScheme.onSurfaceVariant
+                                ),
+                                border = FilterChipDefaults.filterChipBorder(
+                                    enabled = true,
+                                    selected = isSelected,
+                                    borderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
+                                    selectedBorderColor = MaterialTheme.colorScheme.primary,
+                                    borderWidth = 1.dp,
+                                    selectedBorderWidth = 1.dp
+                                )
+                            )
+                        }
+                    }
+
+                    Button(
+                        onClick = { tagExpanded = false },
+                        modifier = Modifier.fillMaxWidth().height(56.dp),
+                        shape = RoundedCornerShape(16.dp),
+                        elevation = ButtonDefaults.buttonElevation(defaultElevation = 0.dp)
+                    ) {
+                        Text("Done", fontWeight = FontWeight.ExtraBold)
+                    }
+                }
             }
         }
 

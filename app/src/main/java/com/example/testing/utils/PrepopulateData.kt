@@ -58,6 +58,18 @@ object PrepopulateData {
             }
         }
 
+        // 4. Add default tags
+        val tagDao = db.tagDao()
+        val existingTags = tagDao.getAllTagsOnce().map { it.name.lowercase().trim() }
+        val defaultTags = listOf("Urgent", "Personal", "Work", "Gift", "Subscription", "Tax", "Groceries", "Entertainment")
+        
+        defaultTags.forEach { tagName ->
+            if (!existingTags.contains(tagName.lowercase())) {
+                Log.d("DB_DEBUG", "Inserting default tag: $tagName")
+                tagDao.insertTag(com.example.testing.data.local.TagEntity(name = tagName))
+            }
+        }
+
         Log.d("DB_DEBUG", "Prepopulation check complete.")
     }
 }
