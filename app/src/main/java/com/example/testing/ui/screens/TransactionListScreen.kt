@@ -145,11 +145,6 @@ fun TransactionListScreen(
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
-        floatingActionButton = {
-            FloatingActionButton(onClick = onAddTransactionClick) {
-                Icon(Icons.Default.Add, contentDescription = "Add Transaction")
-            }
-        },
         modifier = modifier
     ) { paddingValues ->
         Column(modifier = Modifier.fillMaxSize().padding(paddingValues).padding(16.dp)) {

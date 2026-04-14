@@ -64,16 +64,6 @@ fun DashboardScreen(
                 )
             )
         },
-        floatingActionButton = {
-            FloatingActionButton(
-                onClick = onAddTransactionClick,
-                containerColor = MaterialTheme.colorScheme.primary,
-                contentColor = MaterialTheme.colorScheme.onPrimary,
-                shape = RoundedCornerShape(16.dp)
-            ) {
-                Icon(Icons.Default.Add, contentDescription = "Add Transaction")
-            }
-        }
     ) { paddingValues ->
         Column(
             modifier = modifier

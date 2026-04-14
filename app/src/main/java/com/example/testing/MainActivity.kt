@@ -314,10 +314,22 @@ class MainActivity : ComponentActivity() {
                                     themeViewModel.toggleTheme(isDarkTheme)
                                 },
                                 onViewTransactionsClick = {
-                                    navController.navigate(Screen.TransactionList.route)
+                                    navController.navigate(Screen.TransactionList.route) {
+                                        popUpTo(navController.graph.findStartDestination().id) {
+                                            saveState = true
+                                        }
+                                        launchSingleTop = true
+                                        restoreState = true
+                                    }
                                 },
                                 onViewWalletsClick = {
-                                    navController.navigate(Screen.Wallets.route)
+                                    navController.navigate(Screen.Wallets.route) {
+                                        popUpTo(navController.graph.findStartDestination().id) {
+                                            saveState = true
+                                        }
+                                        launchSingleTop = true
+                                        restoreState = true
+                                    }
                                 },
                                 onAddTransactionClick = {
                                     navController.navigate(Screen.AddTransaction.route)
