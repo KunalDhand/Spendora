@@ -50,7 +50,7 @@ import com.example.testing.ui.viewmodel.WalletViewModel
 import java.text.SimpleDateFormat
 import java.util.*
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun AddTransactionScreen(
     viewModel: TransactionViewModel,
