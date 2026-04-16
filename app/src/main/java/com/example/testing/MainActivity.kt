@@ -272,6 +272,9 @@ class MainActivity : ComponentActivity() {
                                     },
                                     selected = selected,
                                     onClick = {
+                                        if (currentDestination?.route == Screen.AddTransaction.route) {
+                                            navController.popBackStack()
+                                        }
                                         navController.navigate(route) {
                                             popUpTo(navController.graph.findStartDestination().id) {
                                                 saveState = true
