@@ -81,6 +81,10 @@ fun AddTransactionScreen(
     var walletExpanded by remember { mutableStateOf(false) }
     var selectedWallet by remember { mutableStateOf<WalletEntity?>(null) }
     
+    // Transfer logic
+    var toWalletExpanded by remember { mutableStateOf(false) }
+    var selectedToWallet by remember { mutableStateOf<WalletEntity?>(null) }
+
     var categoryExpanded by remember { mutableStateOf(false) }
     var selectedCategory by remember { mutableStateOf<CategoryEntity?>(null) }
     var showAddCategoryDialog by remember { mutableStateOf(false) }
@@ -95,7 +99,10 @@ fun AddTransactionScreen(
 
     // Validation
     val isAmountValid = amount.toDoubleOrNull()?.let { it > 0 } ?: false
-    val isFormValid = isAmountValid && selectedWallet != null && selectedCategory != null
+    val isFormValid = when (transactionType) {
+        "TRANSFER" -> isAmountValid && selectedWallet != null && selectedToWallet != null && selectedWallet?.id != selectedToWallet?.id
+        else -> isAmountValid && selectedWallet != null && selectedCategory != null
+    }
 
     // Date Picker Dialog
     if (showDatePicker) {
@@ -265,6 +272,7 @@ fun AddTransactionScreen(
         Row(modifier = Modifier.fillMaxWidth()) {
             val incomeColor = getIncomeColor()
             val expenseColor = getExpenseColor()
+            val transferColor = MaterialTheme.colorScheme.primary
             
             Surface(
                 onClick = { transactionType = "EXPENSE" },
@@ -280,7 +288,7 @@ fun AddTransactionScreen(
             
             Surface(
                 onClick = { transactionType = "INCOME" },
-                modifier = Modifier.weight(1f).padding(start = 4.dp),
+                modifier = Modifier.weight(1f).padding(horizontal = 4.dp),
                 shape = RoundedCornerShape(16.dp),
                 color = if (transactionType == "INCOME") incomeColor else MaterialTheme.colorScheme.surface,
                 border = if (transactionType == "INCOME") null else BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.15f))
@@ -289,10 +297,22 @@ fun AddTransactionScreen(
                     Text("Income", color = if (transactionType == "INCOME") Color.White else MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.ExtraBold)
                 }
             }
+
+            Surface(
+                onClick = { transactionType = "TRANSFER" },
+                modifier = Modifier.weight(1f).padding(start = 4.dp),
+                shape = RoundedCornerShape(16.dp),
+                color = if (transactionType == "TRANSFER") transferColor else MaterialTheme.colorScheme.surface,
+                border = if (transactionType == "TRANSFER") null else BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.15f))
+            ) {
+                Box(modifier = Modifier.padding(vertical = 12.dp), contentAlignment = Alignment.Center) {
+                    Text("Transfer", color = if (transactionType == "TRANSFER") Color.White else MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.ExtraBold)
+                }
+            }
         }
 
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            // Wallet Selector
+            // Wallet Selector (From)
             Box(modifier = Modifier.weight(1f)) {
                 Surface(
                     onClick = { walletExpanded = true },
@@ -302,7 +322,7 @@ fun AddTransactionScreen(
                     border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.15f))
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
-                        Text("Wallet", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                        Text(if (transactionType == "TRANSFER") "From Wallet" else "Wallet", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
                         Text(text = selectedWallet?.name ?: "Select", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
                     }
                 }
@@ -320,39 +340,68 @@ fun AddTransactionScreen(
                 }
             }
 
-            // Category Selector
-            Box(modifier = Modifier.weight(1f)) {
-                Surface(
-                    onClick = { categoryExpanded = true },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp),
-                    color = MaterialTheme.colorScheme.surface,
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.15f))
-                ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Text("Category", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
-                        Text(text = selectedCategory?.name ?: "Select", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
+            // Category OR To-Wallet Selector
+            if (transactionType == "TRANSFER") {
+                Box(modifier = Modifier.weight(1f)) {
+                    Surface(
+                        onClick = { toWalletExpanded = true },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(16.dp),
+                        color = MaterialTheme.colorScheme.surface,
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.15f))
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Text("To Wallet", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                            Text(text = selectedToWallet?.name ?: "Select", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
+                        }
+                    }
+
+                    DropdownMenu(expanded = toWalletExpanded, onDismissRequest = { toWalletExpanded = false }) {
+                        wallets.forEach { wallet ->
+                            DropdownMenuItem(
+                                text = { Text(wallet.name) },
+                                onClick = {
+                                    selectedToWallet = wallet
+                                    toWalletExpanded = false
+                                }
+                            )
+                        }
                     }
                 }
+            } else {
+                Box(modifier = Modifier.weight(1f)) {
+                    Surface(
+                        onClick = { categoryExpanded = true },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(16.dp),
+                        color = MaterialTheme.colorScheme.surface,
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.15f))
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Text("Category", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                            Text(text = selectedCategory?.name ?: "Select", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
+                        }
+                    }
 
-                DropdownMenu(expanded = categoryExpanded, onDismissRequest = { categoryExpanded = false }) {
-                    categories.forEach { category ->
+                    DropdownMenu(expanded = categoryExpanded, onDismissRequest = { categoryExpanded = false }) {
+                        categories.forEach { category ->
+                            DropdownMenuItem(
+                                text = { Text(category.name) },
+                                onClick = {
+                                    selectedCategory = category
+                                    categoryExpanded = false
+                                }
+                            )
+                        }
+                        HorizontalDivider()
                         DropdownMenuItem(
-                            text = { Text(category.name) },
+                            text = { Text("+ Add New") },
                             onClick = {
-                                selectedCategory = category
+                                showAddCategoryDialog = true
                                 categoryExpanded = false
                             }
                         )
                     }
-                    HorizontalDivider()
-                    DropdownMenuItem(
-                        text = { Text("+ Add New") },
-                        onClick = {
-                            showAddCategoryDialog = true
-                            categoryExpanded = false
-                        }
-                    )
                 }
             }
         }
@@ -573,7 +622,8 @@ fun AddTransactionScreen(
                 val transaction = TransactionEntity(
                     amount = amountDouble,
                     walletId = selectedWallet!!.id,
-                    categoryId = selectedCategory!!.id,
+                    toWalletId = if (transactionType == "TRANSFER") selectedToWallet?.id else null,
+                    categoryId = if (transactionType == "TRANSFER") null else selectedCategory?.id,
                     personId = selectedPerson?.id,
                     type = transactionType,
                     note = note,
@@ -587,13 +637,22 @@ fun AddTransactionScreen(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(16.dp),
             colors = ButtonDefaults.buttonColors(
-                containerColor = if (transactionType == "EXPENSE") getExpenseColor() else getIncomeColor(),
+                containerColor = when (transactionType) {
+                    "EXPENSE" -> getExpenseColor()
+                    "INCOME" -> getIncomeColor()
+                    else -> MaterialTheme.colorScheme.primary
+                },
                 disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant,
                 contentColor = Color.White
             ),
             elevation = ButtonDefaults.buttonElevation(defaultElevation = 0.dp)
         ) {
-            Text(if (transactionType == "EXPENSE") "Save Expense" else "Save Income", fontWeight = FontWeight.ExtraBold, modifier = Modifier.padding(8.dp))
+            val buttonText = when (transactionType) {
+                "EXPENSE" -> "Save Expense"
+                "INCOME" -> "Save Income"
+                else -> "Save Transfer"
+            }
+            Text(buttonText, fontWeight = FontWeight.ExtraBold, modifier = Modifier.padding(8.dp))
         }
     }
 }

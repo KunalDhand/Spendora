@@ -10,6 +10,8 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.launch
 
+import com.example.testing.domain.model.WalletType
+
 class WalletViewModel(
     private val repository: WalletRepository
 ) : ViewModel() {
@@ -19,16 +21,17 @@ class WalletViewModel(
     private val _error = MutableSharedFlow<String>()
     val error: SharedFlow<String> = _error
 
-    fun addWallet(name: String, balance: Double? = 0.0) {
+    fun addWallet(name: String, type: WalletType, balance: Double? = 0.0) {
         viewModelScope.launch {
             val result = repository.insert(
                 WalletEntity(
                     name = name,
+                    type = type.name,
                     balance = balance ?: 0.0
                 )
             )
             if (result == -1L) {
-                _error.emit("Wallet already exists")
+                _error.emit("Wallet with this name and type already exists")
             }
         }
     }

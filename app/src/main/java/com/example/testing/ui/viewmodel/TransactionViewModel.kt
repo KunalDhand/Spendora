@@ -202,12 +202,16 @@ class TransactionViewModel(
             Log.d("TAG_DEBUG", "Inserted Transaction ID: $txId")
             
             // Update wallet balance
-            val finalAmount = if (transaction.type == "EXPENSE") {
-                -transaction.amount
-            } else {
-                transaction.amount
+            when (transaction.type) {
+                "EXPENSE" -> repository.updateWalletBalance(transaction.walletId, -transaction.amount)
+                "INCOME" -> repository.updateWalletBalance(transaction.walletId, transaction.amount)
+                "TRANSFER" -> {
+                    repository.updateWalletBalance(transaction.walletId, -transaction.amount)
+                    transaction.toWalletId?.let { 
+                        repository.updateWalletBalance(it, transaction.amount) 
+                    }
+                }
             }
-            repository.updateWalletBalance(transaction.walletId, finalAmount)
 
             tagIds.forEach { tagId ->
                 Log.d("TAG_DEBUG", "Saving tagId=$tagId for txId=$txId")

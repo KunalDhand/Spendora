@@ -6,7 +6,7 @@ import androidx.room.PrimaryKey
 
 @Entity(
     tableName = "wallets",
-    indices = [Index(value = ["name"], unique = true)]
+    indices = [Index(value = ["name", "type"], unique = true)]
 )
 data class WalletEntity(
     @PrimaryKey(autoGenerate = true)

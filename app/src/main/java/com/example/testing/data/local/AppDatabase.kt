@@ -12,7 +12,7 @@ import androidx.room.RoomDatabase
         TagEntity::class,
         TransactionTagCrossRef::class
     ],
-    version = 5
+    version = 6
 )
 abstract class AppDatabase : RoomDatabase() {
 

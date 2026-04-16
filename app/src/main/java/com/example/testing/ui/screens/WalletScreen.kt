@@ -1,29 +1,47 @@
 package com.example.testing.ui.screens
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.LocalIndication
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.PressInteraction
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
-//import androidx.compose.material3.MenuAnchorType
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import com.example.testing.data.local.WalletEntity
+import com.example.testing.domain.model.WalletNameProvider
+import com.example.testing.domain.model.WalletType
 import com.example.testing.ui.theme.getExpenseColor
 import com.example.testing.ui.theme.getIncomeColor
-import androidx.compose.material.icons.filled.SwapHoriz
-import androidx.compose.material.icons.filled.MoreVert
-import com.example.testing.data.local.WalletEntity
 import com.example.testing.ui.viewmodel.TransactionViewModel
 import com.example.testing.ui.viewmodel.WalletViewModel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -51,8 +69,8 @@ fun WalletScreen(
     if (showAddDialog) {
         AddWalletDialog(
             onDismiss = { showAddDialog = false },
-            onAdd = { name: String, balance: Double? ->
-                walletViewModel.addWallet(name, balance)
+            onAdd = { name, type, balance ->
+                walletViewModel.addWallet(name, type, balance)
             }
         )
     }
@@ -155,7 +173,7 @@ fun WalletScreen(
                         colors = CardDefaults.cardColors(
                             containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.05f)
                         ),
-                        border = androidx.compose.foundation.BorderStroke(
+                        border = BorderStroke(
                             width = 1.dp,
                             color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
                         ),
@@ -203,80 +221,323 @@ fun WalletScreen(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AddWalletDialog(
     onDismiss: () -> Unit,
-    onAdd: (String, Double?) -> Unit
+    onAdd: (String, WalletType, Double?) -> Unit
 ) {
+    var selectedType by remember { mutableStateOf<WalletType?>(null) }
     var walletName by remember { mutableStateOf("") }
     var openingBalance by remember { mutableStateOf("") }
-    var step2 by remember { mutableStateOf(false) }
+    
+    var typeExpanded by remember { mutableStateOf(false) }
+    var nameExpanded by remember { mutableStateOf(false) }
+    var step by remember { mutableIntStateOf(1) }
 
-    AlertDialog(
+    val focusManager = LocalFocusManager.current
+    val keyboardController = LocalSoftwareKeyboardController.current
+    val scope = rememberCoroutineScope()
+    val nameFocusRequester = remember { FocusRequester() }
+    
+    var isNameFocused by remember { mutableStateOf(false) }
+
+    // Enhanced BackHandler logic
+    androidx.activity.compose.BackHandler(enabled = true) {
+        if (isNameFocused) {
+            focusManager.clearFocus()
+            keyboardController?.hide()
+        } else if (nameExpanded) {
+            nameExpanded = false
+        } else if (typeExpanded) {
+            typeExpanded = false
+        } else if (step == 2) {
+            step = 1
+        } else {
+            onDismiss()
+        }
+    }
+
+    val bankNames by WalletNameProvider.bankNames.collectAsState()
+    val upiProviders by WalletNameProvider.upiProviders.collectAsState()
+
+    val nameOptions = remember(selectedType, bankNames, upiProviders) {
+        selectedType?.let { WalletNameProvider.getNames(it) } ?: emptyList()
+    }
+
+    LaunchedEffect(Unit) {
+        WalletNameProvider.fetchRemoteNames(scope)
+    }
+
+    Dialog(
         onDismissRequest = onDismiss,
-        title = { Text("Add Wallet", fontWeight = FontWeight.ExtraBold) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                OutlinedTextField(
-                    value = walletName,
-                    onValueChange = { walletName = it },
-                    label = { Text("Wallet Name") },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
-                    shape = RoundedCornerShape(16.dp),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = MaterialTheme.colorScheme.primary,
-                        unfocusedBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
-                    )
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth(0.92f)
+                .wrapContentHeight()
+                .imePadding(),
+            shape = RoundedCornerShape(28.dp),
+            color = MaterialTheme.colorScheme.surface,
+            tonalElevation = 6.dp
+        ) {
+            Column(
+                modifier = Modifier
+                    .padding(24.dp)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(20.dp)
+            ) {
+                Text(
+                    text = "Add New Wallet",
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = MaterialTheme.colorScheme.onSurface
                 )
 
-                AnimatedVisibility(visible = step2) {
-                    Column {
+                if (step == 1) {
+                    // Wallet Type Selection
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(
+                            "Wallet Category",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.Bold
+                        )
+                        ExposedDropdownMenuBox(
+                            expanded = typeExpanded,
+                            onExpandedChange = { typeExpanded = it }
+                        ) {
+                            OutlinedTextField(
+                                value = selectedType?.label ?: "Select Type",
+                                onValueChange = {},
+                                readOnly = true,
+                                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = typeExpanded) },
+                                modifier = Modifier.menuAnchor().fillMaxWidth(),
+                                shape = RoundedCornerShape(16.dp),
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedBorderColor = MaterialTheme.colorScheme.primary,
+                                    unfocusedBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
+                                    unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+                                )
+                            )
+                            ExposedDropdownMenu(
+                                expanded = typeExpanded,
+                                onDismissRequest = { typeExpanded = false }
+                            ) {
+                                WalletType.entries.forEach { type ->
+                                    DropdownMenuItem(
+                                        text = { Text(type.label) },
+                                        onClick = {
+                                            if (type.selectable) {
+                                                selectedType = type
+                                                walletName = ""
+                                                typeExpanded = false
+                                                nameExpanded = true
+                                            }
+                                        },
+                                        enabled = type.selectable
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    // Wallet Name with Integrated Suggestions
+                    if (selectedType != null) {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text(
+                                if (selectedType == WalletType.BANK) "Bank Name" else "Provider/Name",
+                                style = MaterialTheme.typography.labelLarge,
+                                color = MaterialTheme.colorScheme.primary,
+                                fontWeight = FontWeight.Bold
+                            )
+                            
+                            val interactionSource = remember { MutableInteractionSource() }
+                            LaunchedEffect(interactionSource) {
+                                interactionSource.interactions.collect { interaction ->
+                                    if (interaction is PressInteraction.Release) {
+                                        if (!nameExpanded) {
+                                            nameExpanded = true
+                                            scope.launch { delay(50); keyboardController?.hide() }
+                                        } else if (!isNameFocused) {
+                                            nameFocusRequester.requestFocus()
+                                        }
+                                    }
+                                }
+                            }
+
+                            OutlinedTextField(
+                                value = walletName,
+                                onValueChange = { 
+                                    walletName = it
+                                    nameExpanded = true
+                                },
+                                placeholder = { Text("Search or type name...") },
+                                trailingIcon = {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        if (walletName.isNotEmpty()) {
+                                            IconButton(onClick = { walletName = ""; nameExpanded = true }) {
+                                                Icon(Icons.Default.Close, contentDescription = "Clear")
+                                            }
+                                        }
+                                        IconButton(onClick = { 
+                                            nameExpanded = !nameExpanded
+                                            if (!nameExpanded) focusManager.clearFocus()
+                                        }) {
+                                            Icon(
+                                                imageVector = if (nameExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                                                contentDescription = null
+                                            )
+                                        }
+                                    }
+                                },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .focusRequester(nameFocusRequester)
+                                    .onFocusChanged { isNameFocused = it.isFocused },
+                                shape = RoundedCornerShape(16.dp),
+                                interactionSource = interactionSource,
+                                keyboardOptions = KeyboardOptions(
+                                    imeAction = ImeAction.Next,
+                                    autoCorrectEnabled = false
+                                ),
+                                singleLine = true
+                            )
+
+                            val filteredOptions = remember(walletName, nameOptions) {
+                                if (walletName.isEmpty()) nameOptions 
+                                else nameOptions.filter { it.contains(walletName, ignoreCase = true) }
+                            }
+
+                            AnimatedVisibility(
+                                visible = nameExpanded && selectedType != WalletType.OTHER,
+                                enter = expandVertically(),
+                                exit = shrinkVertically()
+                            ) {
+                                Card(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .heightIn(max = 200.dp),
+                                    shape = RoundedCornerShape(12.dp),
+                                    colors = CardDefaults.cardColors(
+                                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                                    ),
+                                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.1f))
+                                ) {
+                                    Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                                        if (filteredOptions.isEmpty() && walletName.isNotEmpty()) {
+                                            Text(
+                                                "Press 'Next' to use custom name: \"$walletName\"",
+                                                modifier = Modifier.padding(16.dp),
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        } else {
+                                            filteredOptions.forEach { option ->
+                                                Row(
+                                                    modifier = Modifier
+                                                        .fillMaxWidth()
+                                                        .clickable(
+                                                            interactionSource = remember { MutableInteractionSource() },
+                                                            indication = LocalIndication.current
+                                                        ) {
+                                                            walletName = option
+                                                            nameExpanded = false
+                                                            focusManager.clearFocus()
+                                                            keyboardController?.hide()
+                                                        }
+                                                        .padding(16.dp),
+                                                    verticalAlignment = Alignment.CenterVertically
+                                                ) {
+                                                    Icon(
+                                                        Icons.Default.AccountBalanceWallet,
+                                                        contentDescription = null,
+                                                        modifier = Modifier.size(18.dp),
+                                                        tint = MaterialTheme.colorScheme.primary
+                                                    )
+                                                    Spacer(modifier = Modifier.width(12.dp))
+                                                    Text(option, style = MaterialTheme.typography.bodyMedium)
+                                                }
+                                                HorizontalDivider(
+                                                    modifier = Modifier.padding(horizontal = 16.dp),
+                                                    thickness = 0.5.dp,
+                                                    color = MaterialTheme.colorScheme.outlineVariant
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    // Step 2: Balance
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(
+                            "Opening Balance",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            "Set the starting balance for $walletName",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
                         OutlinedTextField(
                             value = openingBalance,
                             onValueChange = { openingBalance = it },
-                            label = { Text("Opening Balance (optional)") },
                             modifier = Modifier.fillMaxWidth(),
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            keyboardOptions = KeyboardOptions(
+                                keyboardType = KeyboardType.Number,
+                                imeAction = ImeAction.Done
+                            ),
                             prefix = { Text("₹ ", fontWeight = FontWeight.Bold) },
                             singleLine = true,
-                            shape = RoundedCornerShape(16.dp),
-                            colors = OutlinedTextFieldDefaults.colors(
-                                focusedBorderColor = MaterialTheme.colorScheme.primary,
-                                unfocusedBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
-                            )
+                            shape = RoundedCornerShape(16.dp)
+                        )
+                    }
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    TextButton(onClick = {
+                        if (step == 2) step = 1 else onDismiss()
+                    }) {
+                        Text(if (step == 2) "Back" else "Cancel")
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Button(
+                        onClick = {
+                            if (step == 1) {
+                                if (selectedType != null && walletName.isNotBlank()) {
+                                    step = 2
+                                    focusManager.clearFocus()
+                                }
+                            } else {
+                                val balance = openingBalance.toDoubleOrNull() ?: 0.0
+                                selectedType?.let { onAdd(walletName, it, balance) }
+                                onDismiss()
+                            }
+                        },
+                        enabled = selectedType != null && walletName.isNotBlank(),
+                        shape = RoundedCornerShape(12.dp),
+                        contentPadding = PaddingValues(horizontal = 24.dp, vertical = 12.dp)
+                    ) {
+                        Text(
+                            if (step == 1) "Next" else "Add Wallet",
+                            fontWeight = FontWeight.Bold
                         )
                     }
                 }
             }
-        },
-        confirmButton = {
-            Button(
-                onClick = {
-                    if (!step2) {
-                        if (walletName.isNotBlank()) {
-                            step2 = true
-                        }
-                    } else {
-                        val balance = openingBalance.toDoubleOrNull()
-                        if (walletName.isNotBlank()) {
-                            onAdd(walletName, balance)
-                            onDismiss()
-                        }
-                    }
-                },
-                shape = RoundedCornerShape(12.dp)
-            ) {
-                Text(if (step2) "Add" else "Next", fontWeight = FontWeight.Bold)
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Cancel", color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-        },
-        shape = RoundedCornerShape(28.dp)
-    )
+        }
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -422,7 +683,7 @@ fun WalletItem(
             containerColor = MaterialTheme.colorScheme.surface,
             contentColor = MaterialTheme.colorScheme.onSurface
         ),
-        border = androidx.compose.foundation.BorderStroke(
+        border = BorderStroke(
             width = 1.dp,
             color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
         ),
