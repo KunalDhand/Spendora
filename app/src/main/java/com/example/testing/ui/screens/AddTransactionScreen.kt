@@ -101,7 +101,7 @@ fun AddTransactionScreen(
     val isAmountValid = amount.toDoubleOrNull()?.let { it > 0 } ?: false
     val isFormValid = when (transactionType) {
         "TRANSFER" -> isAmountValid && selectedWallet != null && selectedToWallet != null && selectedWallet?.id != selectedToWallet?.id
-        else -> isAmountValid && selectedWallet != null && selectedCategory != null
+        else -> isAmountValid && selectedWallet != null
     }
 
     // Date Picker Dialog
@@ -379,11 +379,18 @@ fun AddTransactionScreen(
                     ) {
                         Column(modifier = Modifier.padding(16.dp)) {
                             Text("Category", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
-                            Text(text = selectedCategory?.name ?: "Select", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
+                            Text(text = selectedCategory?.name ?: "None (Optional)", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
                         }
                     }
 
                     DropdownMenu(expanded = categoryExpanded, onDismissRequest = { categoryExpanded = false }) {
+                        DropdownMenuItem(
+                            text = { Text("None") },
+                            onClick = {
+                                selectedCategory = null
+                                categoryExpanded = false
+                            }
+                        )
                         categories.forEach { category ->
                             DropdownMenuItem(
                                 text = { Text(category.name) },
