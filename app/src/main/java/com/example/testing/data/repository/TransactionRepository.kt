@@ -57,7 +57,7 @@ class TransactionRepository(
 
     fun getCategorySummary(): Flow<List<CategorySummary>> = transactionDao.getCategorySummary()
     
-    fun getTotalBalance(): Flow<Double?> = transactionDao.getTotalBalance()
+    fun getTotalBalance(): Flow<Double?> = walletDao.getTotalBalance()
     
     fun getWalletBalance(walletId: Int): Flow<Double?> = transactionDao.getWalletBalance(walletId)
 

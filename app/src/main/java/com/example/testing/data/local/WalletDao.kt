@@ -32,4 +32,7 @@ interface WalletDao {
 
     @Query("SELECT * FROM wallets WHERE name = :name LIMIT 1")
     suspend fun getWalletByName(name: String): WalletEntity?
+
+    @Query("SELECT SUM(balance) FROM wallets")
+    fun getTotalBalance(): Flow<Double?>
 }
