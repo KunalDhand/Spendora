@@ -260,13 +260,10 @@ fun AddWalletDialog(
 
     val bankNames by WalletNameProvider.bankNames.collectAsState()
     val upiProviders by WalletNameProvider.upiProviders.collectAsState()
+    val eRupeeProviders by WalletNameProvider.eRupeeProviders.collectAsState()
 
-    val nameOptions = remember(selectedType, bankNames, upiProviders) {
+    val nameOptions = remember(selectedType, bankNames, upiProviders, eRupeeProviders) {
         selectedType?.let { WalletNameProvider.getNames(it) } ?: emptyList()
-    }
-
-    LaunchedEffect(Unit) {
-        WalletNameProvider.fetchRemoteNames(scope)
     }
 
     Dialog(
