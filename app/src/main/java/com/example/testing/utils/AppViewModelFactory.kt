@@ -27,7 +27,8 @@ class AppViewModelFactory(
                         db.categoryDao(),
                         db.walletDao(),
                         db.tagDao(),
-                        db.personDao()
+                        db.personDao(),
+                        db.personCreditDao()
                     )
                 ) as T
             }

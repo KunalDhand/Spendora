@@ -19,7 +19,7 @@ import com.example.testing.data.local.DailyExpense
 import com.example.testing.data.local.NetData
 import com.example.testing.ui.components.CategorySummaryCard
 import com.example.testing.ui.components.LineChartView
-import com.example.testing.ui.components.NetBarChart
+import com.example.testing.ui.components.NetLineChart
 import com.example.testing.ui.components.PieChartView
 import com.example.testing.ui.viewmodel.CategoryUI
 import com.example.testing.ui.viewmodel.CategoryViewModel
@@ -94,65 +94,7 @@ fun AnalysisScreen(
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(24.dp)
         ) {
-            // PnL Section
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 8.dp)
-            ) {
-                Text(
-                    text = "NET INCOME (PNL)",
-                    style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.ExtraBold,
-                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f),
-                    letterSpacing = androidx.compose.ui.unit.TextUnit.Unspecified
-                )
-                
-                Row(
-                    modifier = Modifier
-                        .horizontalScroll(rememberScrollState())
-                        .padding(vertical = 16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    NetTimeFrame.entries.forEach { tf ->
-                        val isSelected = selectedNetFrame == tf
-                        Surface(
-                            onClick = { selectedNetFrame = tf },
-                            shape = RoundedCornerShape(16.dp),
-                            color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface,
-                            contentColor = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
-                            border = if (isSelected) null else androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.15f))
-                        ) {
-                            Text(
-                                text = tf.name.lowercase().replaceFirstChar { it.uppercase() },
-                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                                style = MaterialTheme.typography.labelLarge,
-                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
-                            )
-                        }
-                    }
-                }
-
-                if (netData.isNotEmpty()) {
-                    NetBarChart(data = netData)
-                } else {
-                    Card(
-                        modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp),
-                        shape = RoundedCornerShape(24.dp),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)),
-                        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
-                    ) {
-                        Box(modifier = Modifier.fillMaxWidth().padding(32.dp)) {
-                            Text(text = "No PnL data available", modifier = Modifier.align(androidx.compose.ui.Alignment.Center), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
-                    }
-                }
-            }
-
-            HorizontalDivider()
-
-            // Pie Chart Section
+            // Pie Chart Section (Category Breakdown)
             if (categoryList.isNotEmpty()) {
                 Column(
                     modifier = Modifier
@@ -211,6 +153,64 @@ fun AnalysisScreen(
                     }
                 }
 
+            }
+
+            HorizontalDivider()
+
+            // PnL Section (Net Income)
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 8.dp)
+            ) {
+                Text(
+                    text = "NET INCOME (PNL)",
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f),
+                    letterSpacing = androidx.compose.ui.unit.TextUnit.Unspecified
+                )
+                
+                Row(
+                    modifier = Modifier
+                        .horizontalScroll(rememberScrollState())
+                        .padding(vertical = 16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    NetTimeFrame.entries.forEach { tf ->
+                        val isSelected = selectedNetFrame == tf
+                        Surface(
+                            onClick = { selectedNetFrame = tf },
+                            shape = RoundedCornerShape(16.dp),
+                            color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface,
+                            contentColor = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
+                            border = if (isSelected) null else androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.15f))
+                        ) {
+                            Text(
+                                text = tf.name.lowercase().replaceFirstChar { it.uppercase() },
+                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                                style = MaterialTheme.typography.labelLarge,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
+                            )
+                        }
+                    }
+                }
+
+                if (netData.isNotEmpty()) {
+                    NetLineChart(data = netData)
+                } else {
+                    Card(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp),
+                        shape = RoundedCornerShape(24.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+                    ) {
+                        Box(modifier = Modifier.fillMaxWidth().padding(32.dp)) {
+                            Text(text = "No PnL data available", modifier = Modifier.align(androidx.compose.ui.Alignment.Center), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                }
             }
 
             HorizontalDivider()

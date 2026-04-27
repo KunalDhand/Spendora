@@ -97,6 +97,8 @@ fun AddTransactionScreen(
     val selectedTags = remember { mutableStateListOf<TagEntity>() }
     var showAddTagDialog by remember { mutableStateOf(false) }
 
+    var isCredit by remember { mutableStateOf(false) }
+
     // Validation
     val isAmountValid = amount.toDoubleOrNull()?.let { it > 0 } ?: false
     val isFormValid = when (transactionType) {
@@ -299,14 +301,14 @@ fun AddTransactionScreen(
             }
 
             Surface(
-                onClick = { transactionType = "TRANSFER" },
+                onClick = { /* transactionType = "TRANSFER" */ }, // Disabled for now
                 modifier = Modifier.weight(1f).padding(start = 4.dp),
                 shape = RoundedCornerShape(16.dp),
-                color = if (transactionType == "TRANSFER") transferColor else MaterialTheme.colorScheme.surface,
+                color = if (transactionType == "TRANSFER") transferColor else MaterialTheme.colorScheme.surface.copy(alpha = 0.5f),
                 border = if (transactionType == "TRANSFER") null else BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.15f))
             ) {
                 Box(modifier = Modifier.padding(vertical = 12.dp), contentAlignment = Alignment.Center) {
-                    Text("Transfer", color = if (transactionType == "TRANSFER") Color.White else MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.ExtraBold)
+                    Text("Transfer", color = if (transactionType == "TRANSFER") Color.White else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f), fontWeight = FontWeight.ExtraBold)
                 }
             }
         }
@@ -621,6 +623,41 @@ fun AddTransactionScreen(
             )
         )
 
+        // Credit Checkbox
+        if (transactionType != "TRANSFER") {
+            Surface(
+                onClick = { isCredit = !isCredit },
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(16.dp),
+                color = if (isCredit) MaterialTheme.colorScheme.primary.copy(alpha = 0.05f) else MaterialTheme.colorScheme.surface,
+                border = BorderStroke(1.dp, if (isCredit) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.primary.copy(alpha = 0.15f))
+            ) {
+                Row(
+                    modifier = Modifier.padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Checkbox(
+                        checked = isCredit,
+                        onCheckedChange = { isCredit = it },
+                        colors = CheckboxDefaults.colors(checkedColor = MaterialTheme.colorScheme.primary)
+                    )
+                    Column {
+                        Text(
+                            text = if (transactionType == "EXPENSE") "Lent money (Loan Given)" else "Borrowed money (Debt Taken)",
+                            style = MaterialTheme.typography.bodyLarge,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = "Mark this transaction as a credit",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+        }
+
         Button(
             onClick = {
                 if (!isFormValid) return@Button
@@ -634,7 +671,8 @@ fun AddTransactionScreen(
                     personId = selectedPerson?.id,
                     type = transactionType,
                     note = note,
-                    timestamp = selectedDateTime
+                    timestamp = selectedDateTime,
+                    isCredit = isCredit
                 )
 
                 viewModel.addTransaction(transaction, selectedTags.map { it.id })

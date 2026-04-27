@@ -197,6 +197,22 @@ interface TransactionDao {
         ORDER BY date ASC
     """)
     fun getMonthlyNet(): Flow<List<NetData>>
+
+    @Query("SELECT * FROM transactions WHERE isCredit = 1 ORDER BY timestamp DESC")
+    fun getCreditTransactions(): Flow<List<TransactionEntity>>
+
+    @Query("""
+        SELECT COALESCE(SUM(
+            CASE 
+                WHEN UPPER(type) = 'INCOME' THEN amount 
+                WHEN UPPER(type) = 'EXPENSE' THEN -amount 
+                ELSE 0 
+            END
+        ), 0.0)
+        FROM transactions
+        WHERE personId = :personId AND isCredit = 1
+    """)
+    suspend fun getPersonCreditSum(personId: Int): Double
 }
 
 data class NetData(

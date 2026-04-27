@@ -102,6 +102,47 @@ class TransactionViewModel(
     fun getWeeklyNet(): Flow<List<NetData>> = repository.getWeeklyNet()
     fun getMonthlyNetList(): Flow<List<NetData>> = repository.getMonthlyNetList()
 
+    fun getCreditTransactionsUI(): Flow<List<TransactionUI>> {
+        return repository.getCreditTransactions().map { transactions ->
+            val categories = repository.getAllCategoriesOnce()
+            val wallets = repository.getAllWalletsOnce()
+            val persons = repository.getAllPersonsOnce()
+            val dateFormat = SimpleDateFormat("dd MMM yyyy", Locale.getDefault())
+            val timeFormat = SimpleDateFormat("hh:mm a", Locale.getDefault())
+
+            transactions.map { tx ->
+                val categoryName = categories.find { it.id == tx.categoryId }?.name ?: "Unknown"
+                val walletName = wallets.find { it.id == tx.walletId }?.name ?: "Unknown"
+                val toWalletName = tx.toWalletId?.let { id -> wallets.find { it.id == id }?.name }
+                val personName = persons.find { it.id == tx.personId }?.name
+                
+                val tags = repository.getTagsForTransactionOnce(tx.id)
+                
+                TransactionUI(
+                    id = tx.id,
+                    amount = tx.amount,
+                    type = tx.type,
+                    date = dateFormat.format(Date(tx.timestamp)),
+                    time = timeFormat.format(Date(tx.timestamp)),
+                    category = categoryName,
+                    wallet = walletName,
+                    person = personName,
+                    personId = tx.personId,
+                    categoryId = tx.categoryId,
+                    walletId = tx.walletId,
+                    toWallet = toWalletName,
+                    toWalletId = tx.toWalletId,
+                    tags = tags.map { it.name },
+                    tagIds = tags.map { it.id },
+                    note = tx.note
+                )
+            }
+        }
+    }
+
+    fun getPersonCreditBalances(): Flow<List<com.example.testing.data.local.PersonCreditEntity>> = 
+        repository.getPersonCreditBalances()
+
     private val _categorySummary: Flow<List<CategorySummary>> = repository.getCategorySummary()
 
     fun getCategoryUIList(categories: List<com.example.testing.data.local.CategoryEntity>): Flow<List<CategoryUI>> {
@@ -173,7 +214,14 @@ class TransactionViewModel(
                     tx.toWalletId?.let { repository.updateWalletBalance(it, -tx.amount) }
                 }
             }
-            repository.delete(tx)
+
+            // Revert Credit Balance if applicable
+            if (tx.isCredit && tx.personId != null) {
+                repository.delete(tx)
+                repository.recalculatePersonCredit(tx.personId)
+            } else {
+                repository.delete(tx)
+            }
         }
     }
 
@@ -189,6 +237,12 @@ class TransactionViewModel(
                     repository.updateWalletBalance(tx.walletId, -tx.amount)
                     tx.toWalletId?.let { repository.updateWalletBalance(it, tx.amount) }
                 }
+            }
+
+            // Re-apply Credit Balance if applicable
+            if (tx.isCredit && tx.personId != null) {
+                val delta = if (tx.type == "INCOME") tx.amount else -tx.amount
+                repository.updatePersonCredit(tx.personId, delta)
             }
         }
     }
@@ -211,6 +265,12 @@ class TransactionViewModel(
                         repository.updateWalletBalance(it, transaction.amount) 
                     }
                 }
+            }
+
+            // Update Credit Balance if applicable
+            if (transaction.isCredit && transaction.personId != null) {
+                val delta = if (transaction.type == "INCOME") transaction.amount else -transaction.amount
+                repository.updatePersonCredit(transaction.personId, delta)
             }
 
             tagIds.forEach { tagId ->

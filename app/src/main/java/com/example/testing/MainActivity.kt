@@ -147,6 +147,7 @@ sealed class Screen(val route: String) {
     object AddTransaction : Screen("add_transaction")
     object Wallets : Screen("wallets")
     object Analysis : Screen("analysis")
+    object Credits : Screen("credits")
 }
 
 class MainActivity : ComponentActivity() {
@@ -250,6 +251,7 @@ class MainActivity : ComponentActivity() {
                             val items = listOf(
                                 Triple(Screen.Dashboard.route, "Home", Icons.Default.Home),
                                 Triple(Screen.TransactionList.route, "History", Icons.AutoMirrored.Filled.List),
+                                Triple(Screen.Credits.route, "Credits", Icons.Default.Handshake),
                                 Triple(Screen.Analysis.route, "Analysis", Icons.Default.BarChart),
                                 Triple(Screen.Wallets.route, "Wallets", Icons.Default.AccountBalanceWallet)
                             )
@@ -385,6 +387,15 @@ class MainActivity : ComponentActivity() {
                                         launchSingleTop = true
                                         restoreState = true
                                     }
+                                }
+                            )
+                        }
+                        composable(Screen.Credits.route) {
+                            CreditScreen(
+                                transactionViewModel = txViewModel,
+                                personViewModel = personViewModel,
+                                onNavigateBack = {
+                                    navController.popBackStack()
                                 }
                             )
                         }
