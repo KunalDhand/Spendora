@@ -43,6 +43,10 @@ class TransactionRepository(
         tagDao.insertCrossRef(TransactionTagCrossRef(transactionId.toInt(), tagId))
     }
 
+    suspend fun deleteTagsForTransaction(transactionId: Int) {
+        tagDao.deleteCrossRefsByTransactionId(transactionId)
+    }
+
     suspend fun update(transaction: TransactionEntity) = transactionDao.update(transaction)
 
     suspend fun delete(transaction: TransactionEntity) = transactionDao.delete(transaction)

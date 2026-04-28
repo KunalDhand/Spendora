@@ -59,6 +59,7 @@ fun AddTransactionScreen(
     personViewModel: PersonViewModel,
     tagViewModel: TagViewModel,
     onNavigateBack: () -> Unit,
+    editTransactionId: Int? = null,
     modifier: Modifier = Modifier
 ) {
     var amount by remember { mutableStateOf("") }
@@ -94,6 +95,28 @@ fun AddTransactionScreen(
     var showAddTagDialog by remember { mutableStateOf(false) }
 
     var isCredit by remember { mutableStateOf(false) }
+
+    // Pre-fill logic for edit mode
+    LaunchedEffect(editTransactionId, wallets, categories, persons, allTags) {
+        if (editTransactionId != null && wallets.isNotEmpty()) {
+            val tx = viewModel.getTransactionEntityById(editTransactionId)
+            if (tx != null) {
+                amount = tx.amount.toString()
+                transactionType = tx.type
+                note = tx.note ?: ""
+                selectedDateTime = tx.timestamp
+                selectedWallet = wallets.find { it.id == tx.walletId }
+                selectedCategory = categories.find { it.id == tx.categoryId }
+                selectedPerson = persons.find { it.id == tx.personId }
+                isCredit = tx.isCredit
+                
+                // Fetch tags
+                val tags = viewModel.repository.getTagsForTransactionOnce(tx.id)
+                selectedTags.clear()
+                selectedTags.addAll(tags)
+            }
+        }
+    }
 
     // Validation
     val isAmountValid = amount.toDoubleOrNull()?.let { it > 0 } ?: false
@@ -261,7 +284,11 @@ fun AddTransactionScreen(
     }
 
     Column(modifier = modifier.padding(16.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        Text("Add Transaction", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.ExtraBold)
+        Text(
+            if (editTransactionId == null) "Add Transaction" else "Edit Transaction",
+            style = MaterialTheme.typography.headlineMedium,
+            fontWeight = FontWeight.ExtraBold
+        )
 
         // Type Toggle
         Row(modifier = Modifier.fillMaxWidth()) {
@@ -613,6 +640,7 @@ fun AddTransactionScreen(
                 
                 val amountDouble = amount.toDoubleOrNull() ?: 0.0
                 val transaction = TransactionEntity(
+                    id = editTransactionId ?: 0,
                     amount = amountDouble,
                     walletId = selectedWallet!!.id,
                     toWalletId = null,
@@ -624,7 +652,11 @@ fun AddTransactionScreen(
                     isCredit = isCredit
                 )
 
-                viewModel.addTransaction(transaction, selectedTags.map { it.id })
+                if (editTransactionId == null) {
+                    viewModel.addTransaction(transaction, selectedTags.map { it.id })
+                } else {
+                    viewModel.updateTransaction(transaction, selectedTags.map { it.id })
+                }
                 onNavigateBack()
             },
             enabled = isFormValid,
@@ -641,9 +673,13 @@ fun AddTransactionScreen(
             ),
             elevation = ButtonDefaults.buttonElevation(defaultElevation = 0.dp)
         ) {
-            val buttonText = when (transactionType) {
-                "EXPENSE" -> "Save Expense"
-                else -> "Save Income"
+            val buttonText = if (editTransactionId == null) {
+                when (transactionType) {
+                    "EXPENSE" -> "Save Expense"
+                    else -> "Save Income"
+                }
+            } else {
+                "Update Transaction"
             }
             Text(buttonText, fontWeight = FontWeight.ExtraBold, modifier = Modifier.padding(8.dp))
         }

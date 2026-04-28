@@ -26,7 +26,7 @@ data class CategoryUI(
 )
 
 class TransactionViewModel(
-    private val repository: TransactionRepository
+    val repository: TransactionRepository
 ) : ViewModel() {
 
     suspend fun exportToPdf(
@@ -278,6 +278,56 @@ class TransactionViewModel(
                 repository.addTagToTransaction(txId, tagId)
             }
             Log.d("DB_DEBUG", "Transaction and tags inserted successfully")
+        }
+    }
+
+    fun updateTransaction(updatedTx: TransactionEntity, newTagIds: List<Int>) {
+        viewModelScope.launch {
+            val oldTx = repository.getTransactionById(updatedTx.id) ?: return@launch
+
+            // 1. Revert old transaction's impact on wallet
+            when (oldTx.type) {
+                "INCOME" -> repository.updateWalletBalance(oldTx.walletId, -oldTx.amount)
+                "EXPENSE" -> repository.updateWalletBalance(oldTx.walletId, oldTx.amount)
+                "TRANSFER" -> {
+                    repository.updateWalletBalance(oldTx.walletId, oldTx.amount)
+                    oldTx.toWalletId?.let { repository.updateWalletBalance(it, -oldTx.amount) }
+                }
+            }
+
+            // 2. Revert old transaction's impact on credit
+            if (oldTx.isCredit && oldTx.personId != null) {
+                repository.recalculatePersonCredit(oldTx.personId)
+            }
+
+            // 3. Update the transaction entity
+            repository.update(updatedTx)
+
+            // 4. Update tags
+            repository.deleteTagsForTransaction(updatedTx.id)
+            newTagIds.forEach { tagId ->
+                repository.addTagToTransaction(updatedTx.id.toLong(), tagId)
+            }
+
+            // 5. Apply new transaction's impact on wallet
+            when (updatedTx.type) {
+                "INCOME" -> repository.updateWalletBalance(updatedTx.walletId, updatedTx.amount)
+                "EXPENSE" -> repository.updateWalletBalance(updatedTx.walletId, -updatedTx.amount)
+                "TRANSFER" -> {
+                    repository.updateWalletBalance(updatedTx.walletId, -updatedTx.amount)
+                    updatedTx.toWalletId?.let { repository.updateWalletBalance(it, updatedTx.amount) }
+                }
+            }
+
+            // 6. Apply new transaction's impact on credit
+            if (updatedTx.isCredit && updatedTx.personId != null) {
+                repository.recalculatePersonCredit(updatedTx.personId)
+            }
+            
+            // If the person changed, recalculate the old person too
+            if (oldTx.personId != null && oldTx.personId != updatedTx.personId) {
+                repository.recalculatePersonCredit(oldTx.personId)
+            }
         }
     }
 }

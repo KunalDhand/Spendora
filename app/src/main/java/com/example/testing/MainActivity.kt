@@ -33,10 +33,12 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
 import com.example.testing.data.ThemePreference
 import com.example.testing.data.local.DatabaseProvider
 import com.example.testing.ui.screens.*
@@ -148,6 +150,9 @@ sealed class Screen(val route: String) {
     object Wallets : Screen("wallets")
     object Analysis : Screen("analysis")
     object Credits : Screen("credits")
+    object EditTransaction : Screen("edit_transaction/{transactionId}") {
+        fun createRoute(id: Int) = "edit_transaction/$id"
+    }
 }
 
 class MainActivity : ComponentActivity() {
@@ -360,6 +365,9 @@ class MainActivity : ComponentActivity() {
                                 tagViewModel = tagViewModel,
                                 onAddTransactionClick = {
                                     navController.navigate(Screen.AddTransaction.route)
+                                },
+                                onEditTransactionClick = { id ->
+                                    navController.navigate(Screen.EditTransaction.createRoute(id))
                                 }
                             )
                         }
@@ -370,6 +378,23 @@ class MainActivity : ComponentActivity() {
                                 categoryViewModel = categoryViewModel,
                                 personViewModel = personViewModel,
                                 tagViewModel = tagViewModel,
+                                onNavigateBack = {
+                                    navController.popBackStack()
+                                }
+                            )
+                        }
+                        composable(
+                            route = Screen.EditTransaction.route,
+                            arguments = listOf(navArgument("transactionId") { type = NavType.IntType })
+                        ) { backStackEntry ->
+                            val transactionId = backStackEntry.arguments?.getInt("transactionId") ?: return@composable
+                            AddTransactionScreen(
+                                viewModel = txViewModel,
+                                walletViewModel = walletViewModel,
+                                categoryViewModel = categoryViewModel,
+                                personViewModel = personViewModel,
+                                tagViewModel = tagViewModel,
+                                editTransactionId = transactionId,
                                 onNavigateBack = {
                                     navController.popBackStack()
                                 }
