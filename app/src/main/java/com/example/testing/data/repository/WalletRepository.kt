@@ -22,6 +22,8 @@ class WalletRepository(
 
     suspend fun updateBalance(walletId: Int, amount: Double) = walletDao.updateBalance(walletId, amount)
 
+    suspend fun setCurrentBalance(walletId: Int, newBalance: Double) = walletDao.setCurrentBalance(walletId, newBalance)
+
     suspend fun insertTransfer(transaction: TransactionEntity) = transactionDao.insert(transaction)
 
     suspend fun getTransactionCountForWallet(walletId: Int): Int = 

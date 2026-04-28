@@ -79,4 +79,10 @@ class WalletViewModel(
             }
         }
     }
+
+    fun updateWalletBalance(walletId: Int, newBalance: Double) {
+        viewModelScope.launch {
+            repository.setCurrentBalance(walletId, newBalance)
+        }
+    }
 }

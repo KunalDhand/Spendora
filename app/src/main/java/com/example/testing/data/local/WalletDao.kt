@@ -30,6 +30,9 @@ interface WalletDao {
     @Query("UPDATE wallets SET balance = balance + :amount WHERE id = :walletId")
     suspend fun updateBalance(walletId: Int, amount: Double)
 
+    @Query("UPDATE wallets SET balance = :newBalance WHERE id = :walletId")
+    suspend fun setCurrentBalance(walletId: Int, newBalance: Double)
+
     @Query("SELECT * FROM wallets WHERE name = :name LIMIT 1")
     suspend fun getWalletByName(name: String): WalletEntity?
 

@@ -56,6 +56,7 @@ fun WalletScreen(
     var showAddDialog by remember { mutableStateOf(false) }
     var showTransferDialog by remember { mutableStateOf(false) }
     var walletToDelete by remember { mutableStateOf<WalletEntity?>(null) }
+    var walletToEdit by remember { mutableStateOf<WalletEntity?>(null) }
     
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
@@ -116,6 +117,17 @@ fun WalletScreen(
         )
     }
 
+    if (walletToEdit != null) {
+        EditBalanceDialog(
+            wallet = walletToEdit!!,
+            onDismiss = { walletToEdit = null },
+            onUpdate = { newBalance ->
+                walletViewModel.updateWalletBalance(walletToEdit!!.id, newBalance)
+                walletToEdit = null
+            }
+        )
+    }
+
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
@@ -159,7 +171,8 @@ fun WalletScreen(
             items(wallets) { wallet ->
                 WalletItem(
                     wallet = wallet,
-                    onDelete = { walletToDelete = wallet }
+                    onDelete = { walletToDelete = wallet },
+                    onEditBalance = { walletToEdit = wallet }
                 )
             }
 
@@ -665,9 +678,64 @@ fun TransferDialog(
 }
 
 @Composable
+fun EditBalanceDialog(
+    wallet: WalletEntity,
+    onDismiss: () -> Unit,
+    onUpdate: (Double) -> Unit
+) {
+    var balanceText by remember { mutableStateOf(wallet.balance.toString()) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Edit Balance", fontWeight = FontWeight.ExtraBold) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    "Update current balance for ${wallet.name}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                OutlinedTextField(
+                    value = balanceText,
+                    onValueChange = { balanceText = it },
+                    label = { Text("Current Balance") },
+                    modifier = Modifier.fillMaxWidth(),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    prefix = { Text("₹ ", fontWeight = FontWeight.Bold) },
+                    singleLine = true,
+                    shape = RoundedCornerShape(16.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = MaterialTheme.colorScheme.primary,
+                        unfocusedBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+                    )
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    val balance = balanceText.toDoubleOrNull() ?: 0.0
+                    onUpdate(balance)
+                },
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Text("Update", fontWeight = FontWeight.Bold)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        },
+        shape = RoundedCornerShape(28.dp)
+    )
+}
+
+@Composable
 fun WalletItem(
     wallet: WalletEntity,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    onEditBalance: () -> Unit
 ) {
     var expanded by remember { mutableStateOf(false) }
 
@@ -708,20 +776,27 @@ fun WalletItem(
                 )
             }
 
-            if (!wallet.isDefault) {
-                Box {
-                    IconButton(onClick = { expanded = true }) {
-                        Icon(
-                            imageVector = Icons.Default.MoreVert,
-                            contentDescription = "Wallet Options",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
+            Box {
+                IconButton(onClick = { expanded = true }) {
+                    Icon(
+                        imageVector = Icons.Default.MoreVert,
+                        contentDescription = "Wallet Options",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
 
-                    DropdownMenu(
-                        expanded = expanded,
-                        onDismissRequest = { expanded = false }
-                    ) {
+                DropdownMenu(
+                    expanded = expanded,
+                    onDismissRequest = { expanded = false }
+                ) {
+                    DropdownMenuItem(
+                        text = { Text("Edit Balance") },
+                        onClick = {
+                            expanded = false
+                            onEditBalance()
+                        }
+                    )
+                    if (!wallet.isDefault) {
                         DropdownMenuItem(
                             text = { Text("Delete Wallet", color = getExpenseColor()) },
                             onClick = {
