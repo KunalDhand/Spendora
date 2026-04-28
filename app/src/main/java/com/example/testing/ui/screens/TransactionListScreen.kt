@@ -54,6 +54,7 @@ fun TransactionListScreen(
     personViewModel: PersonViewModel,
     tagViewModel: TagViewModel,
     onAddTransactionClick: () -> Unit,
+    onEditTransactionClick: (Int) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val transactions by viewModel.getTransactionsUI().collectAsState(initial = null)
@@ -79,27 +80,34 @@ fun TransactionListScreen(
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
 
-    val keywords = searchQuery.lowercase().split(" ").filter { it.isNotBlank() }
+    val keywords = remember(searchQuery) { 
+        searchQuery.lowercase().split(" ").filter { it.isNotBlank() } 
+    }
 
-    val filteredTransactions = transactions?.filter { tx ->
-        val matchesFilters = (selectedTagIds.isEmpty() || tx.tagIds.any { it in selectedTagIds }) &&
-                (selectedPersonIds.isEmpty() || tx.personId in selectedPersonIds) &&
-                (selectedCategoryIds.isEmpty() || tx.categoryId in selectedCategoryIds) &&
-                (selectedWalletIds.isEmpty() || tx.walletId in selectedWalletIds)
+    val filteredTransactions = remember(
+        transactions, selectedTagIds.size, selectedPersonIds.size, 
+        selectedCategoryIds.size, selectedWalletIds.size, keywords
+    ) {
+        transactions?.filter { tx ->
+            val matchesFilters = (selectedTagIds.isEmpty() || tx.tagIds.any { it in selectedTagIds }) &&
+                    (selectedPersonIds.isEmpty() || tx.personId in selectedPersonIds) &&
+                    (selectedCategoryIds.isEmpty() || tx.categoryId in selectedCategoryIds) &&
+                    (selectedWalletIds.isEmpty() || tx.walletId in selectedWalletIds)
 
-        if (!matchesFilters) return@filter false
+            if (!matchesFilters) return@filter false
 
-        if (keywords.isEmpty()) return@filter true
+            if (keywords.isEmpty()) return@filter true
 
-        keywords.all { keyword ->
-            val matchPerson = tx.person?.lowercase()?.contains(keyword) == true
-            val matchCategory = tx.category.lowercase().contains(keyword)
-            val matchWallet = tx.wallet.lowercase().contains(keyword)
-            val matchNote = tx.note?.lowercase()?.contains(keyword) == true
-            val matchTags = tx.tags.any { it.lowercase().contains(keyword) }
-            val matchAmount = tx.amount.toString().contains(keyword)
+            keywords.all { keyword ->
+                val matchPerson = tx.person?.lowercase()?.contains(keyword) == true
+                val matchCategory = tx.category.lowercase().contains(keyword)
+                val matchWallet = tx.wallet.lowercase().contains(keyword)
+                val matchNote = tx.note?.lowercase()?.contains(keyword) == true
+                val matchTags = tx.tags.any { it.lowercase().contains(keyword) }
+                val matchAmount = tx.amount.toString().contains(keyword)
 
-            matchPerson || matchCategory || matchWallet || matchNote || matchTags || matchAmount
+                matchPerson || matchCategory || matchWallet || matchNote || matchTags || matchAmount
+            }
         }
     }
 
@@ -406,22 +414,45 @@ fun TransactionListScreen(
                         items(filteredTransactions, key = { it.id }) { tx ->
                             val dismissState = rememberSwipeToDismissBoxState(
                                 confirmValueChange = {
-                                    if (it == SwipeToDismissBoxValue.EndToStart) {
-                                        txToDelete = tx.id
-                                        false // Don't dismiss yet, wait for dialog
-                                    } else {
-                                        false
+                                    when (it) {
+                                        SwipeToDismissBoxValue.EndToStart -> {
+                                            txToDelete = tx.id
+                                            false
+                                        }
+                                        SwipeToDismissBoxValue.StartToEnd -> {
+                                            onEditTransactionClick(tx.id)
+                                            false
+                                        }
+                                        else -> false
                                     }
                                 }
                             )
 
                             SwipeToDismissBox(
                                 state = dismissState,
-                                enableDismissFromStartToEnd = false,
                                 backgroundContent = {
-                                    val alignment = Alignment.CenterEnd
-                                    // Using primaryContainer (FAB color) with 20% opacity
-                                    val color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.2f)
+                                    val direction = dismissState.dismissDirection
+                                    val alignment = when (direction) {
+                                        SwipeToDismissBoxValue.StartToEnd -> Alignment.CenterStart
+                                        SwipeToDismissBoxValue.EndToStart -> Alignment.CenterEnd
+                                        else -> Alignment.Center
+                                    }
+                                    val color = when (direction) {
+                                        SwipeToDismissBoxValue.StartToEnd -> MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
+                                        SwipeToDismissBoxValue.EndToStart -> MaterialTheme.colorScheme.error.copy(alpha = 0.2f)
+                                        else -> Color.Transparent
+                                    }
+                                    val text = when (direction) {
+                                        SwipeToDismissBoxValue.StartToEnd -> "Edit"
+                                        SwipeToDismissBoxValue.EndToStart -> "Delete"
+                                        else -> ""
+                                    }
+                                    val textColor = when (direction) {
+                                        SwipeToDismissBoxValue.StartToEnd -> MaterialTheme.colorScheme.primary
+                                        SwipeToDismissBoxValue.EndToStart -> MaterialTheme.colorScheme.error
+                                        else -> Color.Transparent
+                                    }
+
                                     Box(
                                         Modifier
                                             .fillMaxSize()
@@ -430,8 +461,8 @@ fun TransactionListScreen(
                                         contentAlignment = alignment
                                     ) {
                                         Text(
-                                            "Delete", 
-                                            color = MaterialTheme.colorScheme.onPrimaryContainer, 
+                                            text,
+                                            color = textColor,
                                             fontWeight = FontWeight.Bold
                                         )
                                     }

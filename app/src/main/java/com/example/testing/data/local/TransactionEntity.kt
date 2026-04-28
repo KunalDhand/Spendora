@@ -43,5 +43,6 @@ data class TransactionEntity(
     val type: String,
     val note: String?,
     val timestamp: Long,
-    val personId: Int? = null
+    val personId: Int? = null,
+    val isCredit: Boolean = false
 )

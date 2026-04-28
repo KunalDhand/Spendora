@@ -26,7 +26,7 @@ data class CategoryUI(
 )
 
 class TransactionViewModel(
-    private val repository: TransactionRepository
+    val repository: TransactionRepository
 ) : ViewModel() {
 
     suspend fun exportToPdf(
@@ -102,6 +102,47 @@ class TransactionViewModel(
     fun getWeeklyNet(): Flow<List<NetData>> = repository.getWeeklyNet()
     fun getMonthlyNetList(): Flow<List<NetData>> = repository.getMonthlyNetList()
 
+    fun getCreditTransactionsUI(): Flow<List<TransactionUI>> {
+        return repository.getCreditTransactions().map { transactions ->
+            val categories = repository.getAllCategoriesOnce()
+            val wallets = repository.getAllWalletsOnce()
+            val persons = repository.getAllPersonsOnce()
+            val dateFormat = SimpleDateFormat("dd MMM yyyy", Locale.getDefault())
+            val timeFormat = SimpleDateFormat("hh:mm a", Locale.getDefault())
+
+            transactions.map { tx ->
+                val categoryName = categories.find { it.id == tx.categoryId }?.name ?: "Unknown"
+                val walletName = wallets.find { it.id == tx.walletId }?.name ?: "Unknown"
+                val toWalletName = tx.toWalletId?.let { id -> wallets.find { it.id == id }?.name }
+                val personName = persons.find { it.id == tx.personId }?.name
+                
+                val tags = repository.getTagsForTransactionOnce(tx.id)
+                
+                TransactionUI(
+                    id = tx.id,
+                    amount = tx.amount,
+                    type = tx.type,
+                    date = dateFormat.format(Date(tx.timestamp)),
+                    time = timeFormat.format(Date(tx.timestamp)),
+                    category = categoryName,
+                    wallet = walletName,
+                    person = personName,
+                    personId = tx.personId,
+                    categoryId = tx.categoryId,
+                    walletId = tx.walletId,
+                    toWallet = toWalletName,
+                    toWalletId = tx.toWalletId,
+                    tags = tags.map { it.name },
+                    tagIds = tags.map { it.id },
+                    note = tx.note
+                )
+            }
+        }
+    }
+
+    fun getPersonCreditBalances(): Flow<List<com.example.testing.data.local.PersonCreditEntity>> = 
+        repository.getPersonCreditBalances()
+
     private val _categorySummary: Flow<List<CategorySummary>> = repository.getCategorySummary()
 
     fun getCategoryUIList(categories: List<com.example.testing.data.local.CategoryEntity>): Flow<List<CategoryUI>> {
@@ -173,7 +214,14 @@ class TransactionViewModel(
                     tx.toWalletId?.let { repository.updateWalletBalance(it, -tx.amount) }
                 }
             }
-            repository.delete(tx)
+
+            // Revert Credit Balance if applicable
+            if (tx.isCredit && tx.personId != null) {
+                repository.delete(tx)
+                repository.recalculatePersonCredit(tx.personId)
+            } else {
+                repository.delete(tx)
+            }
         }
     }
 
@@ -190,6 +238,12 @@ class TransactionViewModel(
                     tx.toWalletId?.let { repository.updateWalletBalance(it, tx.amount) }
                 }
             }
+
+            // Re-apply Credit Balance if applicable
+            if (tx.isCredit && tx.personId != null) {
+                val delta = if (tx.type == "INCOME") tx.amount else -tx.amount
+                repository.updatePersonCredit(tx.personId, delta)
+            }
         }
     }
 
@@ -202,18 +256,78 @@ class TransactionViewModel(
             Log.d("TAG_DEBUG", "Inserted Transaction ID: $txId")
             
             // Update wallet balance
-            val finalAmount = if (transaction.type == "EXPENSE") {
-                -transaction.amount
-            } else {
-                transaction.amount
+            when (transaction.type) {
+                "EXPENSE" -> repository.updateWalletBalance(transaction.walletId, -transaction.amount)
+                "INCOME" -> repository.updateWalletBalance(transaction.walletId, transaction.amount)
+                "TRANSFER" -> {
+                    repository.updateWalletBalance(transaction.walletId, -transaction.amount)
+                    transaction.toWalletId?.let { 
+                        repository.updateWalletBalance(it, transaction.amount) 
+                    }
+                }
             }
-            repository.updateWalletBalance(transaction.walletId, finalAmount)
+
+            // Update Credit Balance if applicable
+            if (transaction.isCredit && transaction.personId != null) {
+                val delta = if (transaction.type == "INCOME") transaction.amount else -transaction.amount
+                repository.updatePersonCredit(transaction.personId, delta)
+            }
 
             tagIds.forEach { tagId ->
                 Log.d("TAG_DEBUG", "Saving tagId=$tagId for txId=$txId")
                 repository.addTagToTransaction(txId, tagId)
             }
             Log.d("DB_DEBUG", "Transaction and tags inserted successfully")
+        }
+    }
+
+    fun updateTransaction(updatedTx: TransactionEntity, newTagIds: List<Int>) {
+        viewModelScope.launch {
+            val oldTx = repository.getTransactionById(updatedTx.id) ?: return@launch
+
+            // 1. Revert old transaction's impact on wallet
+            when (oldTx.type) {
+                "INCOME" -> repository.updateWalletBalance(oldTx.walletId, -oldTx.amount)
+                "EXPENSE" -> repository.updateWalletBalance(oldTx.walletId, oldTx.amount)
+                "TRANSFER" -> {
+                    repository.updateWalletBalance(oldTx.walletId, oldTx.amount)
+                    oldTx.toWalletId?.let { repository.updateWalletBalance(it, -oldTx.amount) }
+                }
+            }
+
+            // 2. Revert old transaction's impact on credit
+            if (oldTx.isCredit && oldTx.personId != null) {
+                repository.recalculatePersonCredit(oldTx.personId)
+            }
+
+            // 3. Update the transaction entity
+            repository.update(updatedTx)
+
+            // 4. Update tags
+            repository.deleteTagsForTransaction(updatedTx.id)
+            newTagIds.forEach { tagId ->
+                repository.addTagToTransaction(updatedTx.id.toLong(), tagId)
+            }
+
+            // 5. Apply new transaction's impact on wallet
+            when (updatedTx.type) {
+                "INCOME" -> repository.updateWalletBalance(updatedTx.walletId, updatedTx.amount)
+                "EXPENSE" -> repository.updateWalletBalance(updatedTx.walletId, -updatedTx.amount)
+                "TRANSFER" -> {
+                    repository.updateWalletBalance(updatedTx.walletId, -updatedTx.amount)
+                    updatedTx.toWalletId?.let { repository.updateWalletBalance(it, updatedTx.amount) }
+                }
+            }
+
+            // 6. Apply new transaction's impact on credit
+            if (updatedTx.isCredit && updatedTx.personId != null) {
+                repository.recalculatePersonCredit(updatedTx.personId)
+            }
+            
+            // If the person changed, recalculate the old person too
+            if (oldTx.personId != null && oldTx.personId != updatedTx.personId) {
+                repository.recalculatePersonCredit(oldTx.personId)
+            }
         }
     }
 }

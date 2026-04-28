@@ -59,6 +59,7 @@ fun AddTransactionScreen(
     personViewModel: PersonViewModel,
     tagViewModel: TagViewModel,
     onNavigateBack: () -> Unit,
+    editTransactionId: Int? = null,
     modifier: Modifier = Modifier
 ) {
     var amount by remember { mutableStateOf("") }
@@ -80,7 +81,7 @@ fun AddTransactionScreen(
     
     var walletExpanded by remember { mutableStateOf(false) }
     var selectedWallet by remember { mutableStateOf<WalletEntity?>(null) }
-    
+
     var categoryExpanded by remember { mutableStateOf(false) }
     var selectedCategory by remember { mutableStateOf<CategoryEntity?>(null) }
     var showAddCategoryDialog by remember { mutableStateOf(false) }
@@ -93,9 +94,33 @@ fun AddTransactionScreen(
     val selectedTags = remember { mutableStateListOf<TagEntity>() }
     var showAddTagDialog by remember { mutableStateOf(false) }
 
+    var isCredit by remember { mutableStateOf(false) }
+
+    // Pre-fill logic for edit mode
+    LaunchedEffect(editTransactionId, wallets, categories, persons, allTags) {
+        if (editTransactionId != null && wallets.isNotEmpty()) {
+            val tx = viewModel.getTransactionEntityById(editTransactionId)
+            if (tx != null) {
+                amount = tx.amount.toString()
+                transactionType = tx.type
+                note = tx.note ?: ""
+                selectedDateTime = tx.timestamp
+                selectedWallet = wallets.find { it.id == tx.walletId }
+                selectedCategory = categories.find { it.id == tx.categoryId }
+                selectedPerson = persons.find { it.id == tx.personId }
+                isCredit = tx.isCredit
+                
+                // Fetch tags
+                val tags = viewModel.repository.getTagsForTransactionOnce(tx.id)
+                selectedTags.clear()
+                selectedTags.addAll(tags)
+            }
+        }
+    }
+
     // Validation
     val isAmountValid = amount.toDoubleOrNull()?.let { it > 0 } ?: false
-    val isFormValid = isAmountValid && selectedWallet != null && selectedCategory != null
+    val isFormValid = isAmountValid && selectedWallet != null
 
     // Date Picker Dialog
     if (showDatePicker) {
@@ -259,7 +284,11 @@ fun AddTransactionScreen(
     }
 
     Column(modifier = modifier.padding(16.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        Text("Add Transaction", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.ExtraBold)
+        Text(
+            if (editTransactionId == null) "Add Transaction" else "Edit Transaction",
+            style = MaterialTheme.typography.headlineMedium,
+            fontWeight = FontWeight.ExtraBold
+        )
 
         // Type Toggle
         Row(modifier = Modifier.fillMaxWidth()) {
@@ -292,7 +321,7 @@ fun AddTransactionScreen(
         }
 
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            // Wallet Selector
+            // Wallet Selector (From)
             Box(modifier = Modifier.weight(1f)) {
                 Surface(
                     onClick = { walletExpanded = true },
@@ -331,11 +360,18 @@ fun AddTransactionScreen(
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
                         Text("Category", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
-                        Text(text = selectedCategory?.name ?: "Select", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
+                        Text(text = selectedCategory?.name ?: "None (Optional)", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
                     }
                 }
 
                 DropdownMenu(expanded = categoryExpanded, onDismissRequest = { categoryExpanded = false }) {
+                    DropdownMenuItem(
+                        text = { Text("None") },
+                        onClick = {
+                            selectedCategory = null
+                            categoryExpanded = false
+                        }
+                    )
                     categories.forEach { category ->
                         DropdownMenuItem(
                             text = { Text(category.name) },
@@ -565,35 +601,87 @@ fun AddTransactionScreen(
             )
         )
 
+        // Credit Checkbox
+        Surface(
+            onClick = { isCredit = !isCredit },
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(16.dp),
+            color = if (isCredit) MaterialTheme.colorScheme.primary.copy(alpha = 0.05f) else MaterialTheme.colorScheme.surface,
+            border = BorderStroke(1.dp, if (isCredit) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.primary.copy(alpha = 0.15f))
+        ) {
+            Row(
+                modifier = Modifier.padding(16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Checkbox(
+                    checked = isCredit,
+                    onCheckedChange = { isCredit = it },
+                    colors = CheckboxDefaults.colors(checkedColor = MaterialTheme.colorScheme.primary)
+                )
+                Column {
+                    Text(
+                        text = if (transactionType == "EXPENSE") "Lent money (Loan Given)" else "Borrowed money (Debt Taken)",
+                        style = MaterialTheme.typography.bodyLarge,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = "Mark this transaction as a credit",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
+
         Button(
             onClick = {
                 if (!isFormValid) return@Button
                 
                 val amountDouble = amount.toDoubleOrNull() ?: 0.0
                 val transaction = TransactionEntity(
+                    id = editTransactionId ?: 0,
                     amount = amountDouble,
                     walletId = selectedWallet!!.id,
-                    categoryId = selectedCategory!!.id,
+                    toWalletId = null,
+                    categoryId = selectedCategory?.id,
                     personId = selectedPerson?.id,
                     type = transactionType,
                     note = note,
-                    timestamp = selectedDateTime
+                    timestamp = selectedDateTime,
+                    isCredit = isCredit
                 )
 
-                viewModel.addTransaction(transaction, selectedTags.map { it.id })
+                if (editTransactionId == null) {
+                    viewModel.addTransaction(transaction, selectedTags.map { it.id })
+                } else {
+                    viewModel.updateTransaction(transaction, selectedTags.map { it.id })
+                }
                 onNavigateBack()
             },
             enabled = isFormValid,
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(16.dp),
             colors = ButtonDefaults.buttonColors(
-                containerColor = if (transactionType == "EXPENSE") getExpenseColor() else getIncomeColor(),
+                containerColor = when (transactionType) {
+                    "EXPENSE" -> getExpenseColor()
+                    "INCOME" -> getIncomeColor()
+                    else -> MaterialTheme.colorScheme.primary
+                },
                 disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant,
                 contentColor = Color.White
             ),
             elevation = ButtonDefaults.buttonElevation(defaultElevation = 0.dp)
         ) {
-            Text(if (transactionType == "EXPENSE") "Save Expense" else "Save Income", fontWeight = FontWeight.ExtraBold, modifier = Modifier.padding(8.dp))
+            val buttonText = if (editTransactionId == null) {
+                when (transactionType) {
+                    "EXPENSE" -> "Save Expense"
+                    else -> "Save Income"
+                }
+            } else {
+                "Update Transaction"
+            }
+            Text(buttonText, fontWeight = FontWeight.ExtraBold, modifier = Modifier.padding(8.dp))
         }
     }
 }

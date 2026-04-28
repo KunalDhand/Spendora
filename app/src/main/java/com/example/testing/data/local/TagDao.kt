@@ -21,6 +21,9 @@ interface TagDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertCrossRef(crossRef: TransactionTagCrossRef)
 
+    @Query("DELETE FROM transaction_tag_cross_ref WHERE transactionId = :transactionId")
+    suspend fun deleteCrossRefsByTransactionId(transactionId: Int)
+
     @Query("""
         SELECT tags.* FROM tags 
         INNER JOIN transaction_tag_cross_ref ON tags.id = transaction_tag_cross_ref.tagId 
