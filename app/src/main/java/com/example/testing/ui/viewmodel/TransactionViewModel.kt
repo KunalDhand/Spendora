@@ -103,7 +103,9 @@ class TransactionViewModel(
         
         val categories = repository.getAllCategoriesOnce()
         val wallets = repository.getAllWalletsOnce()
+        val persons = repository.getAllPersonsOnce()
         val dateFormat = SimpleDateFormat("dd MMM yyyy", Locale.getDefault())
+        val timeFormat = SimpleDateFormat("hh:mm a", Locale.getDefault())
         
         val dateRangeText = if (filter == DateFilter.CUSTOM && customStart != null && customEnd != null) {
             "${dateFormat.format(Date(customStart))} - ${dateFormat.format(Date(customEnd))}"
@@ -113,15 +115,26 @@ class TransactionViewModel(
 
         val exportList = transactions.map { tx ->
             val categoryName = categories.find { it.id == tx.categoryId }?.name ?: "Unknown"
-            val walletName = wallets.find { it.id == tx.walletId }?.name ?: "Unknown"
-            val dateStr = dateFormat.format(Date(tx.timestamp))
+            val fromWallet = wallets.find { it.id == tx.walletId }?.name ?: "Unknown"
+            val toWallet = if (tx.type == "TRANSFER") {
+                wallets.find { it.id == tx.toWalletId }?.name ?: "Unknown"
+            } else null
+            val walletDisplay = if (toWallet != null) "$fromWallet -> $toWallet" else fromWallet
+            
+            val personName = persons.find { it.id == tx.personId }?.name
+            val tags = repository.getTagsForTransactionOnce(tx.id).joinToString(", ") { it.name }
 
             ExportTransaction(
                 type = tx.type,
                 amount = tx.amount,
                 categoryName = categoryName,
-                walletName = walletName,
-                date = dateStr
+                walletName = walletDisplay,
+                date = dateFormat.format(Date(tx.timestamp)),
+                time = timeFormat.format(Date(tx.timestamp)),
+                personName = personName,
+                note = tx.note,
+                tags = tags,
+                isCredit = tx.isCredit
             )
         }
 
