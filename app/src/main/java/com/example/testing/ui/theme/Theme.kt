@@ -63,3 +63,6 @@ fun getIncomeColor() = IncomeGreen
 
 @Composable
 fun getExpenseColor() = ExpenseRed
+
+@Composable
+fun getTransferColor() = TransferBlue

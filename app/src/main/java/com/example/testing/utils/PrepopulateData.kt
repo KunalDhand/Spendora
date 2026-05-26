@@ -49,7 +49,7 @@ object PrepopulateData {
 
         // 3. Add missing default categories
         val finalCategories = categoryDao.getAllCategoriesOnce().map { it.name.lowercase().trim() }
-        val defaultCategories = listOf("Dining Out", "Travel", "Bills", "Shopping", "Rent", "Salary")
+        val defaultCategories = listOf("Dining Out", "Travel", "Bills", "Shopping", "Rent", "Salary", "Transfer")
         
         defaultCategories.forEach { categoryName ->
             if (!finalCategories.contains(categoryName.lowercase())) {
@@ -68,6 +68,14 @@ object PrepopulateData {
                 Log.d("DB_DEBUG", "Inserting default tag: $tagName")
                 tagDao.insertTag(com.example.testing.data.local.TagEntity(name = tagName))
             }
+        }
+
+        // 5. Add default TRANSFER person
+        val personDao = db.personDao()
+        val existingPersons = personDao.getAllPersonsOnce().map { it.name.lowercase().trim() }
+        if (!existingPersons.contains("transfer")) {
+            Log.d("DB_DEBUG", "Inserting default person: TRANSFER")
+            personDao.insert(com.example.testing.data.local.PersonEntity(name = "TRANSFER"))
         }
 
         Log.d("DB_DEBUG", "Prepopulation check complete.")

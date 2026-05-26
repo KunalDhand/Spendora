@@ -19,6 +19,7 @@ val DarkOnBackground = Color(0xFFF8FAFC)
 // Semantic Colors
 val IncomeGreen = Color(0xFF22C55E)
 val ExpenseRed = Color(0xFFEF4444)
+val TransferBlue = Color(0xFF3B82F6)
 
 // Keeping these for legacy compatibility during refactor if needed
 val PrimaryBlue = LightPrimary
