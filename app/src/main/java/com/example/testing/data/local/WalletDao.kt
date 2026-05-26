@@ -9,6 +9,9 @@ interface WalletDao {
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insert(wallet: WalletEntity): Long
 
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAll(wallets: List<WalletEntity>)
+
     @Query("SELECT COUNT(*) FROM wallets")
     suspend fun getWalletCount(): Int
 
@@ -26,6 +29,9 @@ interface WalletDao {
 
     @Query("SELECT * FROM wallets")
     suspend fun getAllWalletsOnce(): List<WalletEntity>
+
+    @Query("DELETE FROM wallets")
+    suspend fun deleteAllWallets()
 
     @Query("UPDATE wallets SET balance = balance + :amount WHERE id = :walletId")
     suspend fun updateBalance(walletId: Int, amount: Double)

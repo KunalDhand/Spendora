@@ -18,8 +18,23 @@ interface TagDao {
     @Query("SELECT * FROM tags")
     suspend fun getAllTagsOnce(): List<TagEntity>
 
+    @Query("SELECT * FROM transaction_tag_cross_ref")
+    suspend fun getAllCrossRefsOnce(): List<TransactionTagCrossRef>
+
+    @Query("DELETE FROM tags")
+    suspend fun deleteAllTags()
+
+    @Query("DELETE FROM transaction_tag_cross_ref")
+    suspend fun deleteAllCrossRefs()
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertCrossRef(crossRef: TransactionTagCrossRef)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertTags(tags: List<TagEntity>)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertCrossRefs(crossRefs: List<TransactionTagCrossRef>)
 
     @Query("DELETE FROM transaction_tag_cross_ref WHERE transactionId = :transactionId")
     suspend fun deleteCrossRefsByTransactionId(transactionId: Int)

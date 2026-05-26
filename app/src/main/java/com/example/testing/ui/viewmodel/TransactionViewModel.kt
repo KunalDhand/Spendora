@@ -16,9 +16,18 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.*
+import android.net.Uri
+import android.widget.Toast
+import com.example.testing.data.local.BackupData
+import com.google.gson.GsonBuilder
+import java.io.OutputStreamWriter
+import android.content.Context
+import kotlinx.coroutines.withContext
+import java.io.InputStreamReader
 
 data class CategoryUI(
     val name: String,
@@ -29,8 +38,62 @@ class TransactionViewModel(
     val repository: TransactionRepository
 ) : ViewModel() {
 
+    fun importBackup(context: Context, uri: Uri) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                context.contentResolver.openInputStream(uri)?.use { inputStream ->
+                    InputStreamReader(inputStream).use { reader ->
+                        val gson = com.google.gson.Gson()
+                        val backupData = gson.fromJson(reader, BackupData::class.java)
+                        
+                        if (backupData != null) {
+                            repository.restoreBackup(backupData)
+                            withContext(Dispatchers.Main) {
+                                Toast.makeText(context, "Data restored successfully!", Toast.LENGTH_SHORT).show()
+                            }
+                        } else {
+                            withContext(Dispatchers.Main) {
+                                Toast.makeText(context, "Failed to parse backup file", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(context, "Error restoring backup: ${e.message}", Toast.LENGTH_LONG).show()
+                }
+            }
+        }
+    }
+
+    fun exportBackup(context: Context, uri: Uri) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val backupData = repository.getBackupData()
+                val gson = GsonBuilder().setPrettyPrinting().create()
+                val json = gson.toJson(backupData)
+                
+                context.contentResolver.openOutputStream(uri)?.use { outputStream ->
+                    OutputStreamWriter(outputStream).use { writer ->
+                        writer.write(json)
+                    }
+                }
+                
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(context, "Backup saved successfully!", Toast.LENGTH_SHORT).show()
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(context, "Failed to save backup", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+    }
+
     suspend fun exportToPdf(
-        context: android.content.Context,
+        context: Context,
         filter: DateFilter,
         customStart: Long? = null,
         customEnd: Long? = null

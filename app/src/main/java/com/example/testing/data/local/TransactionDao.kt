@@ -6,11 +6,20 @@ import kotlinx.coroutines.flow.Flow
 @Dao
 interface TransactionDao {
 
+    @Query("SELECT * FROM transactions")
+    suspend fun getAllTransactionsOnce(): List<TransactionEntity>
+
+    @Query("DELETE FROM transactions")
+    suspend fun deleteAllTransactions()
+
     @Query("SELECT * FROM transactions WHERE id = :id")
     suspend fun getTransactionById(id: Int): TransactionEntity?
 
-    @Insert
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(transaction: TransactionEntity): Long
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAll(transactions: List<TransactionEntity>)
 
     @Update
     suspend fun update(transaction: TransactionEntity)

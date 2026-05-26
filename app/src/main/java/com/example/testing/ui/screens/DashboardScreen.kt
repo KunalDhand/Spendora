@@ -1,5 +1,7 @@
 package com.example.testing.ui.screens
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -35,6 +37,20 @@ fun DashboardScreen(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var showExportDialog by remember { mutableStateOf(false) }
+
+    val backupLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("application/json"),
+        onResult = { uri ->
+            uri?.let { viewModel.exportBackup(context, it) }
+        }
+    )
+
+    val importLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument(),
+        onResult = { uri ->
+            uri?.let { viewModel.importBackup(context, it) }
+        }
+    )
 
     val totalBalance by viewModel.totalBalance.collectAsState(initial = 0.0)
     
@@ -160,6 +176,25 @@ fun DashboardScreen(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Text("Export PDF Report", color = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f))
+            }
+
+            TextButton(
+                onClick = { 
+                    val timestamp = java.text.SimpleDateFormat("yyyyMMdd_HHmmss", java.util.Locale.getDefault()).format(java.util.Date())
+                    backupLauncher.launch("spendora_backup_$timestamp.json")
+                },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("Backup Data (JSON)", color = MaterialTheme.colorScheme.secondary.copy(alpha = 0.7f))
+            }
+
+            TextButton(
+                onClick = { 
+                    importLauncher.launch(arrayOf("application/json"))
+                },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("Import Data (JSON)", color = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.7f))
             }
         }
     }

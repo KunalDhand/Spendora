@@ -20,4 +20,10 @@ interface CategoryDao {
 
     @Query("SELECT * FROM categories")
     suspend fun getAllCategoriesOnce(): List<CategoryEntity>
+
+    @Query("DELETE FROM categories")
+    suspend fun deleteAllCategories()
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAll(categories: List<CategoryEntity>)
 }

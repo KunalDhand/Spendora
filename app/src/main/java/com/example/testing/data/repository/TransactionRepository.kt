@@ -15,6 +15,7 @@ import com.example.testing.data.local.NetData
 import com.example.testing.data.local.PersonDao
 import com.example.testing.data.local.PersonCreditDao
 import com.example.testing.data.local.PersonCreditEntity
+import com.example.testing.data.local.BackupData
 
 class TransactionRepository(
     private val transactionDao: TransactionDao,
@@ -24,6 +25,39 @@ class TransactionRepository(
     private val personDao: PersonDao,
     private val personCreditDao: PersonCreditDao
 ) {
+    suspend fun getBackupData(): BackupData {
+        return BackupData(
+            transactions = transactionDao.getAllTransactionsOnce(),
+            wallets = walletDao.getAllWalletsOnce(),
+            categories = categoryDao.getAllCategoriesOnce(),
+            persons = personDao.getAllPersonsOnce(),
+            tags = tagDao.getAllTagsOnce(),
+            tagCrossRefs = tagDao.getAllCrossRefsOnce(),
+            personCredits = personCreditDao.getAllPersonCreditsOnce()
+        )
+    }
+
+    suspend fun restoreBackup(backup: BackupData) {
+        // Clear all existing data
+        transactionDao.deleteAllTransactions()
+        tagDao.deleteAllCrossRefs()
+        tagDao.deleteAllTags()
+        walletDao.deleteAllWallets()
+        categoryDao.deleteAllCategories()
+        personDao.deleteAllPersons()
+        personCreditDao.deleteAllPersonCredits()
+
+        // Insert backup data
+        // Order matters for foreign keys: persons/wallets/categories first, then transactions, then cross-refs
+        personDao.insertAll(backup.persons)
+        walletDao.insertAll(backup.wallets)
+        categoryDao.insertAll(backup.categories)
+        transactionDao.insertAll(backup.transactions)
+        tagDao.insertTags(backup.tags)
+        tagDao.insertCrossRefs(backup.tagCrossRefs)
+        personCreditDao.insertAll(backup.personCredits)
+    }
+
     suspend fun getAllCategoriesOnce(): List<CategoryEntity> = categoryDao.getAllCategoriesOnce()
     suspend fun getAllWalletsOnce(): List<WalletEntity> = walletDao.getAllWalletsOnce()
     suspend fun getAllPersonsOnce(): List<com.example.testing.data.local.PersonEntity> = personDao.getAllPersonsOnce()

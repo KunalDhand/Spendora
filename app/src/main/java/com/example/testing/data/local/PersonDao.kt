@@ -2,6 +2,7 @@ package com.example.testing.data.local
 
 import androidx.room.Dao
 import androidx.room.Insert
+import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import kotlinx.coroutines.flow.Flow
 
@@ -16,4 +17,10 @@ interface PersonDao {
 
     @Query("SELECT * FROM persons")
     suspend fun getAllPersonsOnce(): List<PersonEntity>
+
+    @Query("DELETE FROM persons")
+    suspend fun deleteAllPersons()
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAll(persons: List<PersonEntity>)
 }
