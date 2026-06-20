@@ -42,6 +42,6 @@ interface WalletDao {
     @Query("SELECT * FROM wallets WHERE name = :name LIMIT 1")
     suspend fun getWalletByName(name: String): WalletEntity?
 
-    @Query("SELECT SUM(balance) FROM wallets")
+    @Query("SELECT SUM(balance) FROM wallets WHERE excludeFromNet = 0")
     fun getTotalBalance(): Flow<Double?>
 }

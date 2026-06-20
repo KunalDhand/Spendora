@@ -34,6 +34,8 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.platform.LocalContext
+import com.example.testing.data.ThemePreference
 import com.example.testing.data.local.WalletEntity
 import com.example.testing.domain.model.WalletNameProvider
 import com.example.testing.domain.model.WalletType
@@ -60,6 +62,9 @@ fun WalletScreen(
     
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
+
+    val isBalanceVisible by ThemePreference.getBalanceVisibility(context).collectAsState(initial = true)
 
     LaunchedEffect(Unit) {
         walletViewModel.error.collect { message ->
@@ -142,6 +147,16 @@ fun WalletScreen(
                     }
                 },
                 actions = {
+                    IconButton(onClick = {
+                        scope.launch {
+                            ThemePreference.saveBalanceVisibility(context, !isBalanceVisible)
+                        }
+                    }) {
+                        Icon(
+                            imageVector = if (isBalanceVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff,
+                            contentDescription = "Toggle Balance Visibility"
+                        )
+                    }
                     IconButton(onClick = { showTransferDialog = true }) {
                         Icon(
                             imageVector = Icons.Default.SwapHoriz,
@@ -172,7 +187,8 @@ fun WalletScreen(
                 WalletItem(
                     wallet = wallet,
                     onDelete = { walletToDelete = wallet },
-                    onEditBalance = { walletToEdit = wallet }
+                    onEditBalance = { walletToEdit = wallet },
+                    isBalanceVisible = isBalanceVisible
                 )
             }
 
@@ -735,7 +751,8 @@ fun EditBalanceDialog(
 fun WalletItem(
     wallet: WalletEntity,
     onDelete: () -> Unit,
-    onEditBalance: () -> Unit
+    onEditBalance: () -> Unit,
+    isBalanceVisible: Boolean
 ) {
     var expanded by remember { mutableStateOf(false) }
 
@@ -769,7 +786,7 @@ fun WalletItem(
                     color = MaterialTheme.colorScheme.primary
                 )
                 Text(
-                    text = "₹${"%.2f".format(wallet.balance)}",
+                    text = if (isBalanceVisible) "₹${"%.2f".format(wallet.balance)}" else "₹ ••••",
                     style = MaterialTheme.typography.titleLarge,
                     color = if (wallet.balance >= 0) getIncomeColor() else getExpenseColor(),
                     fontWeight = FontWeight.Bold

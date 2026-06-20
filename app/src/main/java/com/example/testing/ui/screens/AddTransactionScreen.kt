@@ -39,6 +39,7 @@ import com.example.testing.data.local.CategoryEntity
 import com.example.testing.data.local.PersonEntity
 import com.example.testing.data.local.TagEntity
 import com.example.testing.data.local.TransactionEntity
+import com.example.testing.data.local.TransactionSplitEntity
 import com.example.testing.data.local.WalletEntity
 import com.example.testing.ui.theme.getExpenseColor
 import com.example.testing.ui.theme.getIncomeColor
@@ -50,6 +51,11 @@ import com.example.testing.ui.viewmodel.TransactionViewModel
 import com.example.testing.ui.viewmodel.WalletViewModel
 import java.text.SimpleDateFormat
 import java.util.*
+
+data class SplitItem(
+    var person: PersonEntity? = null,
+    var amount: String = ""
+)
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -100,6 +106,11 @@ fun AddTransactionScreen(
 
     var isCredit by remember { mutableStateOf(false) }
 
+    // Advanced Split Logic
+    var isAdvanceEnabled by remember { mutableStateOf(false) }
+    var whoPaidUser by remember { mutableStateOf(true) } // true = "You" paid, false = "Someone Else" paid
+    val splits = remember { mutableStateListOf<SplitItem>() }
+
     // Pre-fill logic for edit mode
     LaunchedEffect(editTransactionId, wallets, categories, persons, allTags) {
         if (editTransactionId != null && wallets.isNotEmpty()) {
@@ -119,16 +130,36 @@ fun AddTransactionScreen(
                 val tags = viewModel.repository.getTagsForTransactionOnce(tx.id)
                 selectedTags.clear()
                 selectedTags.addAll(tags)
+
+                // Fetch splits
+                val existingSplits = viewModel.repository.getSplitsForTransaction(tx.id)
+                if (existingSplits.isNotEmpty()) {
+                    isAdvanceEnabled = true
+                    whoPaidUser = existingSplits.first().isLent
+                    splits.clear()
+                    existingSplits.forEach { s ->
+                        val p = persons.find { it.id == s.personId }
+                        splits.add(SplitItem(p, s.amount.toString()))
+                    }
+                }
             }
         }
     }
 
     // Validation
-    val isAmountValid = amount.toDoubleOrNull()?.let { it > 0 } ?: false
+    val totalAmount = amount.toDoubleOrNull() ?: 0.0
+    val isAmountValid = totalAmount > 0
+    
+    val splitSum = splits.sumOf { it.amount.toDoubleOrNull() ?: 0.0 }
+    val areSplitsValid = if (isAdvanceEnabled && transactionType == "EXPENSE") {
+        splits.isNotEmpty() && splits.all { it.person != null && (it.amount.toDoubleOrNull() ?: 0.0) > 0 } &&
+                (splitSum <= totalAmount + 0.0001)
+    } else true
+
     val isFormValid = if (transactionType == "TRANSFER") {
         isAmountValid && selectedWallet != null && selectedToWallet != null && selectedWallet != selectedToWallet
     } else {
-        isAmountValid && selectedWallet != null
+        isAmountValid && selectedWallet != null && areSplitsValid
     }
 
     // Date Picker Dialog
@@ -318,7 +349,10 @@ fun AddTransactionScreen(
             }
             
             Surface(
-                onClick = { transactionType = "INCOME" },
+                onClick = { 
+                    transactionType = "INCOME"
+                    isAdvanceEnabled = false
+                },
                 modifier = Modifier.weight(1f).padding(horizontal = 4.dp),
                 shape = RoundedCornerShape(16.dp),
                 color = if (transactionType == "INCOME") incomeColor else MaterialTheme.colorScheme.surface,
@@ -332,6 +366,7 @@ fun AddTransactionScreen(
             Surface(
                 onClick = { 
                     transactionType = "TRANSFER"
+                    isAdvanceEnabled = false
                     selectedCategory = categories.find { it.name.equals("Transfer", ignoreCase = true) }
                     selectedPerson = persons.find { it.name.equals("TRANSFER", ignoreCase = true) }
                 },
@@ -634,7 +669,7 @@ fun AddTransactionScreen(
             label = { Text("Amount") },
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
             modifier = Modifier.fillMaxWidth(),
-            isError = amount.isNotEmpty() && !isAmountValid,
+            isError = (amount.isNotEmpty() && !isAmountValid) || (isAdvanceEnabled && transactionType == "EXPENSE" && splitSum > totalAmount + 0.0001),
             prefix = { Text("₹ ", fontWeight = FontWeight.Bold) },
             shape = RoundedCornerShape(16.dp),
             colors = OutlinedTextFieldDefaults.colors(
@@ -644,6 +679,8 @@ fun AddTransactionScreen(
         )
         if (amount.isNotEmpty() && !isAmountValid) {
             Text("Please enter a valid amount greater than 0", color = getExpenseColor(), style = MaterialTheme.typography.bodySmall)
+        } else if (isAdvanceEnabled && transactionType == "EXPENSE" && splitSum > totalAmount + 0.0001) {
+            Text("Total split amount exceeds transaction amount", color = getExpenseColor(), style = MaterialTheme.typography.bodySmall)
         }
 
         // Note Input
@@ -659,10 +696,189 @@ fun AddTransactionScreen(
             )
         )
 
+        // Advance Split Logic Toggle
+        if (transactionType == "EXPENSE") {
+            Surface(
+                onClick = { 
+                    isAdvanceEnabled = !isAdvanceEnabled
+                    if (isAdvanceEnabled) isCredit = false
+                },
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(16.dp),
+                color = if (isAdvanceEnabled) MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.3f) else MaterialTheme.colorScheme.surface,
+                border = BorderStroke(1.dp, if (isAdvanceEnabled) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.primary.copy(alpha = 0.15f))
+            ) {
+                Row(
+                    modifier = Modifier.padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Icon(
+                        imageVector = if (isAdvanceEnabled) Icons.Default.AddCircle else Icons.Default.AddCircle, 
+                        contentDescription = null,
+                        tint = if (isAdvanceEnabled) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.primary
+                    )
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Split with Others", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
+                        Text("Divide this amount among multiple people", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    Switch(
+                        checked = isAdvanceEnabled, 
+                        onCheckedChange = { 
+                            isAdvanceEnabled = it
+                            if (it) isCredit = false
+                        }
+                    )
+                }
+            }
+        }
+
+        if (isAdvanceEnabled && transactionType == "EXPENSE") {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(24.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+            ) {
+                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                    // Payment Direction
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Surface(
+                            onClick = { whoPaidUser = true },
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(12.dp),
+                            color = if (whoPaidUser) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface,
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.2f))
+                        ) {
+                            Box(modifier = Modifier.padding(12.dp), contentAlignment = Alignment.Center) {
+                                Text("You Paid", color = if (whoPaidUser) Color.White else MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                        Surface(
+                            onClick = { whoPaidUser = false },
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(12.dp),
+                            color = if (!whoPaidUser) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface,
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.2f))
+                        ) {
+                            Box(modifier = Modifier.padding(12.dp), contentAlignment = Alignment.Center) {
+                                Text("Someone Else Paid", color = if (!whoPaidUser) Color.White else MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+
+                    Text("Splits", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                    
+                    splits.forEachIndexed { index, split ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            var splitPersonExpanded by remember { mutableStateOf(false) }
+                            Box(modifier = Modifier.weight(1.5f)) {
+                                OutlinedTextField(
+                                    value = split.person?.name ?: "Select Person",
+                                    onValueChange = {},
+                                    readOnly = true,
+                                    modifier = Modifier.fillMaxWidth(),
+                                    shape = RoundedCornerShape(12.dp),
+                                    trailingIcon = {
+                                        IconButton(onClick = { splitPersonExpanded = true }) {
+                                            Icon(Icons.Default.AddCircle, contentDescription = null)
+                                        }
+                                    }
+                                )
+                                DropdownMenu(expanded = splitPersonExpanded, onDismissRequest = { splitPersonExpanded = false }) {
+                                    persons.forEach { p ->
+                                        DropdownMenuItem(
+                                            text = { Text(p.name) },
+                                            onClick = {
+                                                splits[index] = split.copy(person = p)
+                                                splitPersonExpanded = false
+                                            }
+                                        )
+                                    }
+                                }
+                            }
+                            
+                            OutlinedTextField(
+                                value = split.amount,
+                                onValueChange = { if (it.all { char -> char.isDigit() || char == '.' }) splits[index] = split.copy(amount = it) },
+                                modifier = Modifier.weight(1f),
+                                label = { Text("Amount") },
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                shape = RoundedCornerShape(12.dp)
+                            )
+
+                            IconButton(onClick = { splits.removeAt(index) }) {
+                                Icon(Icons.Default.AddCircle, contentDescription = "Remove", tint = MaterialTheme.colorScheme.error)
+                            }
+                        }
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Button(
+                            onClick = { splits.add(SplitItem()) },
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
+                        ) {
+                            Icon(Icons.Default.AddCircle, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text("Add Person")
+                        }
+
+                        Button(
+                            onClick = {
+                                if (totalAmount > 0) {
+                                    val count = splits.size + 1
+                                    val equalAmount = String.format(Locale.US, "%.2f", totalAmount / count)
+                                    splits.forEachIndexed { i, s ->
+                                        splits[i] = s.copy(amount = equalAmount)
+                                    }
+                                }
+                            },
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.tertiary)
+                        ) {
+                            Text("Equal Split")
+                        }
+                    }
+
+                    if (isAdvanceEnabled && transactionType == "EXPENSE" && splitSum > totalAmount + 0.0001) {
+                        Text(
+                            "Total split amount (₹$splitSum) cannot exceed transaction amount (₹$totalAmount)",
+                            color = MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.bodySmall,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(top = 4.dp)
+                        )
+                    }
+                    if (isAdvanceEnabled && transactionType == "EXPENSE" && splits.isEmpty()) {
+                        Text(
+                            "Add at least one person to split with",
+                            color = MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.bodySmall,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(top = 4.dp)
+                        )
+                    }
+                }
+            }
+        }
+
         // Credit Checkbox
         if (transactionType != "TRANSFER") {
             Surface(
-                onClick = { isCredit = !isCredit },
+                onClick = { 
+                    isCredit = !isCredit 
+                    if (isCredit) isAdvanceEnabled = false
+                },
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(16.dp),
                 color = if (isCredit) MaterialTheme.colorScheme.primary.copy(alpha = 0.05f) else MaterialTheme.colorScheme.surface,
@@ -675,7 +891,10 @@ fun AddTransactionScreen(
                 ) {
                     Checkbox(
                         checked = isCredit,
-                        onCheckedChange = { isCredit = it },
+                        onCheckedChange = { 
+                            isCredit = it 
+                            if (it) isAdvanceEnabled = false
+                        },
                         colors = CheckboxDefaults.colors(checkedColor = MaterialTheme.colorScheme.primary)
                     )
                     Column {
@@ -699,6 +918,48 @@ fun AddTransactionScreen(
                 if (!isFormValid) return@Button
                 
                 val amountDouble = amount.toDoubleOrNull() ?: 0.0
+
+                val splitEntities = if (isAdvanceEnabled && transactionType == "EXPENSE") {
+                    splits.filter { it.person != null && it.amount.toDoubleOrNull() != null }.map {
+                        TransactionSplitEntity(
+                            transactionId = editTransactionId ?: 0,
+                            personId = it.person!!.id,
+                            amount = it.amount.toDouble(),
+                            isLent = whoPaidUser
+                        )
+                    }
+                } else emptyList()
+
+                // Enhanced Note for Split (appends breakdown if You Paid)
+                var finalNote = note
+                if (transactionType == "EXPENSE" && whoPaidUser && splitEntities.isNotEmpty()) {
+                    val splitSum = splitEntities.sumOf { it.amount }
+                    val myShare = amountDouble - splitSum
+                    
+                    val splitNoteBuilder = StringBuilder()
+                    val shareList = splitEntities.map { it.amount } + myShare
+                    val isEquallySplit = shareList.all { kotlin.math.abs(it - shareList[0]) < 0.01 }
+                    
+                    if (isEquallySplit) splitNoteBuilder.append("Equal split\n")
+                    
+                    val myShareStr = if (myShare % 1.0 == 0.0) myShare.toInt().toString() else String.format(Locale.US, "%.2f", myShare)
+                    splitNoteBuilder.append("me = $myShareStr\n")
+                    
+                    splitEntities.forEach { entity ->
+                        val pName = persons.find { it.id == entity.personId }?.name ?: "Unknown"
+                        val sAmtStr = if (entity.amount % 1.0 == 0.0) entity.amount.toInt().toString() else entity.amount.toString()
+                        splitNoteBuilder.append("$pName = $sAmtStr\n")
+                    }
+                    
+                    val generatedNote = splitNoteBuilder.toString().trim()
+                    if (!finalNote.contains(generatedNote)) {
+                        if (finalNote.isNotEmpty()) {
+                            finalNote += if (finalNote.endsWith("\n")) "\n" else "\n\n"
+                        }
+                        finalNote += generatedNote
+                    }
+                }
+
                 val transaction = TransactionEntity(
                     id = editTransactionId ?: 0,
                     amount = amountDouble,
@@ -707,15 +968,15 @@ fun AddTransactionScreen(
                     categoryId = selectedCategory?.id,
                     personId = selectedPerson?.id,
                     type = transactionType,
-                    note = note,
+                    note = finalNote,
                     timestamp = selectedDateTime,
                     isCredit = if (transactionType == "TRANSFER") false else isCredit
                 )
 
                 if (editTransactionId == null) {
-                    viewModel.addTransaction(transaction, selectedTags.map { it.id })
+                    viewModel.addTransaction(transaction, selectedTags.map { it.id }, splitEntities)
                 } else {
-                    viewModel.updateTransaction(transaction, selectedTags.map { it.id })
+                    viewModel.updateTransaction(transaction, selectedTags.map { it.id }, splitEntities)
                 }
                 onNavigateBack()
             },

@@ -9,6 +9,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Handshake
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -30,6 +31,7 @@ fun CreditScreen(
     transactionViewModel: TransactionViewModel,
     personViewModel: PersonViewModel,
     onNavigateBack: () -> Unit,
+    onNavigateToAngel: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val creditTransactions by transactionViewModel.getCreditTransactionsUI().collectAsState(initial = emptyList())
@@ -43,6 +45,13 @@ fun CreditScreen(
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    }
+                },
+                actions = {
+                    TextButton(onClick = onNavigateToAngel) {
+                        Icon(Icons.Default.SwapHoriz, contentDescription = null)
+                        Spacer(Modifier.width(4.dp))
+                        Text("Angel")
                     }
                 }
             )

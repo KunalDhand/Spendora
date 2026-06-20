@@ -17,6 +17,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
+import com.example.testing.data.ThemePreference
 import com.example.testing.ui.components.*
 import com.example.testing.ui.theme.getExpenseColor
 import com.example.testing.ui.theme.getIncomeColor
@@ -62,11 +65,23 @@ fun DashboardScreen(
     val monthlyExpense by viewModel.monthlyExpense.collectAsState(initial = 0.0)
     val monthlyNet by viewModel.monthlyNet.collectAsState(initial = 0.0)
 
+    val isBalanceVisible by ThemePreference.getBalanceVisibility(context).collectAsState(initial = true)
+
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text("Dashboard", fontWeight = FontWeight.ExtraBold) },
                 actions = {
+                    IconButton(onClick = {
+                        scope.launch {
+                            ThemePreference.saveBalanceVisibility(context, !isBalanceVisible)
+                        }
+                    }) {
+                        Icon(
+                            imageVector = if (isBalanceVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff,
+                            contentDescription = "Toggle Balance Visibility"
+                        )
+                    }
                     IconButton(onClick = onToggleTheme) {
                         Icon(
                             imageVector = if (isDarkTheme) Icons.Default.LightMode else Icons.Default.DarkMode,
@@ -115,7 +130,7 @@ fun DashboardScreen(
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        text = "₹${"%.2f".format(totalBalance ?: 0.0)}",
+                        text = if (isBalanceVisible) "₹${"%.2f".format(totalBalance ?: 0.0)}" else "₹ ••••",
                         style = MaterialTheme.typography.headlineLarge,
                         fontWeight = FontWeight.ExtraBold,
                         color = MaterialTheme.colorScheme.onSurface
@@ -219,6 +234,8 @@ fun SummaryCard(
     expense: Double,
     net: Double
 ) {
+    val context = LocalContext.current
+    val isBalanceVisible by ThemePreference.getBalanceVisibility(context).collectAsState(initial = true)
     val incomeColor = getIncomeColor()
     val expenseColor = getExpenseColor()
 
@@ -253,7 +270,7 @@ fun SummaryCard(
                     shape = RoundedCornerShape(8.dp)
                 ) {
                     Text(
-                        text = "₹${"%.2f".format(net)}",
+                        text = if (isBalanceVisible) "₹${"%.2f".format(net)}" else "₹ ••••",
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
                         style = MaterialTheme.typography.labelLarge,
                         fontWeight = FontWeight.Bold,
@@ -267,12 +284,12 @@ fun SummaryCard(
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Column {
                     Text("Income", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Text("₹${"%.2f".format(income)}", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold, color = incomeColor)
+                    Text(if (isBalanceVisible) "₹${"%.2f".format(income)}" else "₹ ••••", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold, color = incomeColor)
                 }
                 
                 Column(horizontalAlignment = Alignment.End) {
                     Text("Expense", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Text("₹${"%.2f".format(expense)}", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold, color = expenseColor)
+                    Text(if (isBalanceVisible) "₹${"%.2f".format(expense)}" else "₹ ••••", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold, color = expenseColor)
                 }
             }
         }

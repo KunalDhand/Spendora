@@ -23,8 +23,21 @@ class TransactionRepository(
     private val walletDao: WalletDao,
     private val tagDao: TagDao,
     private val personDao: PersonDao,
-    private val personCreditDao: PersonCreditDao
+    private val personCreditDao: PersonCreditDao,
+    private val transactionSplitDao: com.example.testing.data.local.TransactionSplitDao,
+    private val personAngelDao: com.example.testing.data.local.PersonAngelDao
 ) {
+    suspend fun insertSplit(split: com.example.testing.data.local.TransactionSplitEntity) {
+        transactionSplitDao.insertSplit(split)
+    }
+
+    suspend fun getSplitsForTransaction(transactionId: Int): List<com.example.testing.data.local.TransactionSplitEntity> {
+        return transactionSplitDao.getSplitsForTransaction(transactionId)
+    }
+
+    suspend fun deleteSplitsForTransaction(transactionId: Int) {
+        transactionSplitDao.deleteSplitsForTransaction(transactionId)
+    }
     suspend fun getBackupData(): BackupData {
         return BackupData(
             transactions = transactionDao.getAllTransactionsOnce(),
@@ -33,7 +46,9 @@ class TransactionRepository(
             persons = personDao.getAllPersonsOnce(),
             tags = tagDao.getAllTagsOnce(),
             tagCrossRefs = tagDao.getAllCrossRefsOnce(),
-            personCredits = personCreditDao.getAllPersonCreditsOnce()
+            personCredits = personCreditDao.getAllPersonCreditsOnce(),
+            personAngelBalances = personAngelDao.getAllPersonAngelBalancesOnce(),
+            transactionSplits = transactionSplitDao.getAllSplitsOnce()
         )
     }
 
@@ -46,6 +61,8 @@ class TransactionRepository(
         categoryDao.deleteAllCategories()
         personDao.deleteAllPersons()
         personCreditDao.deleteAllPersonCredits()
+        personAngelDao.deleteAllPersonAngelBalances()
+        transactionSplitDao.deleteAllSplits()
 
         // Insert backup data
         // Order matters for foreign keys: persons/wallets/categories first, then transactions, then cross-refs
@@ -56,6 +73,8 @@ class TransactionRepository(
         tagDao.insertTags(backup.tags)
         tagDao.insertCrossRefs(backup.tagCrossRefs)
         personCreditDao.insertAll(backup.personCredits)
+        personAngelDao.insertAll(backup.personAngelBalances)
+        transactionSplitDao.insertAll(backup.transactionSplits)
     }
 
     suspend fun getAllCategoriesOnce(): List<CategoryEntity> = categoryDao.getAllCategoriesOnce()
@@ -115,9 +134,14 @@ class TransactionRepository(
     suspend fun getTransactionCountForWallet(walletId: Int): Int = 
         transactionDao.getTransactionCountForWallet(walletId)
 
+    suspend fun getWalletByName(name: String): WalletEntity? = walletDao.getWalletByName(name)
+
     fun getCreditTransactions(): Flow<List<TransactionEntity>> = transactionDao.getCreditTransactions()
     
     fun getPersonCreditBalances(): Flow<List<PersonCreditEntity>> = personCreditDao.getAllPersonCredits()
+
+    fun getPersonAngelBalances(): Flow<List<com.example.testing.data.local.PersonAngelEntity>> = 
+        personAngelDao.getAllPersonAngelBalances()
 
     suspend fun updatePersonCredit(personId: Int, delta: Double) {
         val current = personCreditDao.getPersonCreditById(personId)
@@ -130,6 +154,19 @@ class TransactionRepository(
 
     suspend fun recalculatePersonCredit(personId: Int) {
         val total = transactionDao.getPersonCreditSum(personId)
-        personCreditDao.insertOrUpdate(PersonCreditEntity(personId, total))
+        if (kotlin.math.abs(total) < 0.01) {
+            personCreditDao.deletePersonCreditById(personId)
+        } else {
+            personCreditDao.insertOrUpdate(PersonCreditEntity(personId, total))
+        }
+    }
+
+    suspend fun recalculatePersonAngel(personId: Int) {
+        val total = transactionSplitDao.getPersonSplitSum(personId)
+        if (kotlin.math.abs(total) < 0.01) {
+            personAngelDao.deletePersonAngelById(personId)
+        } else {
+            personAngelDao.insertOrUpdate(com.example.testing.data.local.PersonAngelEntity(personId, total))
+        }
     }
 }

@@ -16,5 +16,7 @@ data class TransactionUI(
     val toWalletId: Int? = null,
     val tags: List<String>,
     val tagIds: List<Int>,
-    val note: String?
+    val note: String?,
+    val isCredit: Boolean = false,
+    val hasSplits: Boolean = false
 )

@@ -46,12 +46,14 @@ interface TransactionDao {
     @Query("""
         SELECT COALESCE(SUM(
             CASE 
-                WHEN UPPER(type) = 'INCOME' THEN amount 
-                WHEN UPPER(type) = 'EXPENSE' THEN -amount 
+                WHEN UPPER(t.type) = 'INCOME' THEN t.amount 
+                WHEN UPPER(t.type) = 'EXPENSE' THEN -t.amount 
                 ELSE 0 
             END
         ), 0.0) 
-        FROM transactions
+        FROM transactions t
+        INNER JOIN wallets w ON t.walletId = w.id
+        WHERE w.excludeFromNet = 0
     """)
     fun getTotalBalance(): Flow<Double?>
 
@@ -59,93 +61,107 @@ interface TransactionDao {
     @Query("""
         SELECT COALESCE(SUM(
             CASE 
-                WHEN UPPER(type) = 'INCOME' THEN amount
-                WHEN UPPER(type) = 'EXPENSE' THEN -amount
+                WHEN UPPER(t.type) = 'INCOME' THEN t.amount
+                WHEN UPPER(t.type) = 'EXPENSE' THEN -t.amount
                 ELSE 0
             END
         ), 0.0) 
-        FROM transactions
-        WHERE date(datetime(timestamp / 1000, 'unixepoch', 'localtime')) = date('now', 'localtime')
+        FROM transactions t
+        INNER JOIN wallets w ON t.walletId = w.id
+        WHERE w.excludeFromNet = 0
+        AND date(datetime(t.timestamp / 1000, 'unixepoch', 'localtime')) = date('now', 'localtime')
     """)
     fun getTodayNet(): Flow<Double?>
 
     @Query("""
         SELECT COALESCE(SUM(
             CASE 
-                WHEN UPPER(type) = 'INCOME' THEN amount
-                WHEN UPPER(type) = 'EXPENSE' THEN -amount
+                WHEN UPPER(t.type) = 'INCOME' THEN t.amount
+                WHEN UPPER(t.type) = 'EXPENSE' THEN -t.amount
                 ELSE 0
             END
         ), 0.0)
-        FROM transactions
-        WHERE strftime('%Y-%m', datetime(timestamp / 1000, 'unixepoch', 'localtime')) = 
+        FROM transactions t
+        INNER JOIN wallets w ON t.walletId = w.id
+        WHERE w.excludeFromNet = 0
+        AND strftime('%Y-%m', datetime(t.timestamp / 1000, 'unixepoch', 'localtime')) = 
               strftime('%Y-%m', 'now', 'localtime')
     """)
     fun getMonthlyNetSummary(): Flow<Double?>
 
     // Daily Queries
     @Query("""
-        SELECT COALESCE(SUM(amount), 0.0) FROM transactions
-        WHERE UPPER(type) = 'INCOME'
-        AND date(datetime(timestamp / 1000, 'unixepoch', 'localtime')) = date('now', 'localtime')
+        SELECT COALESCE(SUM(t.amount), 0.0) FROM transactions t
+        INNER JOIN wallets w ON t.walletId = w.id
+        WHERE UPPER(t.type) = 'INCOME' AND w.excludeFromNet = 0
+        AND date(datetime(t.timestamp / 1000, 'unixepoch', 'localtime')) = date('now', 'localtime')
     """)
     fun getTodayIncome(): Flow<Double?>
 
     @Query("""
-        SELECT COALESCE(SUM(amount), 0.0) FROM transactions
-        WHERE UPPER(type) = 'EXPENSE'
-        AND date(datetime(timestamp / 1000, 'unixepoch', 'localtime')) = date('now', 'localtime')
+        SELECT COALESCE(SUM(t.amount), 0.0) FROM transactions t
+        INNER JOIN wallets w ON t.walletId = w.id
+        WHERE UPPER(t.type) = 'EXPENSE' AND w.excludeFromNet = 0
+        AND date(datetime(t.timestamp / 1000, 'unixepoch', 'localtime')) = date('now', 'localtime')
     """)
     fun getTodayExpense(): Flow<Double?>
 
     // Monthly Queries
     @Query("""
-        SELECT COALESCE(SUM(amount), 0.0) FROM transactions
-        WHERE UPPER(type) = 'INCOME'
-        AND strftime('%Y-%m', datetime(timestamp / 1000, 'unixepoch', 'localtime')) = 
+        SELECT COALESCE(SUM(t.amount), 0.0) FROM transactions t
+        INNER JOIN wallets w ON t.walletId = w.id
+        WHERE UPPER(t.type) = 'INCOME' AND w.excludeFromNet = 0
+        AND strftime('%Y-%m', datetime(t.timestamp / 1000, 'unixepoch', 'localtime')) = 
               strftime('%Y-%m', 'now', 'localtime')
     """)
     fun getMonthlyIncome(): Flow<Double?>
 
     @Query("""
-        SELECT COALESCE(SUM(amount), 0.0) FROM transactions
-        WHERE UPPER(type) = 'EXPENSE'
-        AND strftime('%Y-%m', datetime(timestamp / 1000, 'unixepoch', 'localtime')) = 
+        SELECT COALESCE(SUM(t.amount), 0.0) FROM transactions t
+        INNER JOIN wallets w ON t.walletId = w.id
+        WHERE UPPER(t.type) = 'EXPENSE' AND w.excludeFromNet = 0
+        AND strftime('%Y-%m', datetime(t.timestamp / 1000, 'unixepoch', 'localtime')) = 
               strftime('%Y-%m', 'now', 'localtime')
     """)
     fun getMonthlyExpense(): Flow<Double?>
 
     @Query("""
-        SELECT categoryId, SUM(amount) as total 
-        FROM transactions 
-        WHERE UPPER(type) = 'EXPENSE'
-        GROUP BY categoryId
+        SELECT t.categoryId, SUM(t.amount) as total 
+        FROM transactions t
+        INNER JOIN wallets w ON t.walletId = w.id
+        WHERE UPPER(t.type) = 'EXPENSE' AND w.excludeFromNet = 0
+        GROUP BY t.categoryId
     """)
     fun getCategorySummary(): Flow<List<CategorySummary>>
 
     @Query("""
-        SELECT type, SUM(amount) as sum
-        FROM transactions 
-        GROUP BY type
+        SELECT t.type, SUM(t.amount) as sum
+        FROM transactions t
+        INNER JOIN wallets w ON t.walletId = w.id
+        WHERE w.excludeFromNet = 0
+        GROUP BY t.type
     """)
     fun debugTotals(): Flow<List<TypeSum>>
 
     @Query("""
         SELECT 
-        date(datetime(timestamp / 1000, 'unixepoch', 'localtime')) as date,
-        SUM(amount) as total
-        FROM transactions
-        WHERE UPPER(type) = 'EXPENSE'
-        AND timestamp BETWEEN :start AND :end
+        date(datetime(t.timestamp / 1000, 'unixepoch', 'localtime')) as date,
+        SUM(t.amount) as total
+        FROM transactions t
+        INNER JOIN wallets w ON t.walletId = w.id
+        WHERE UPPER(t.type) = 'EXPENSE' AND w.excludeFromNet = 0
+        AND t.timestamp BETWEEN :start AND :end
         GROUP BY date
         ORDER BY date ASC
     """)
     fun getDailyExpensesByRange(start: Long, end: Long): Flow<List<DailyExpense>>
 
     @Query("""
-        SELECT * FROM transactions
-        WHERE timestamp BETWEEN :start AND :end
-        ORDER BY timestamp DESC
+        SELECT t.* FROM transactions t
+        INNER JOIN wallets w ON t.walletId = w.id
+        WHERE w.excludeFromNet = 0
+        AND t.timestamp BETWEEN :start AND :end
+        ORDER BY t.timestamp DESC
     """)
     suspend fun getTransactionsByDateRange(
         start: Long,
@@ -155,15 +171,17 @@ interface TransactionDao {
     // Net Income (PnL) Queries
     @Query("""
         SELECT 
-        date(datetime(timestamp / 1000, 'unixepoch', 'localtime')) as date,
+        date(datetime(t.timestamp / 1000, 'unixepoch', 'localtime')) as date,
         SUM(
             CASE 
-                WHEN UPPER(type) = 'INCOME' THEN amount
-                WHEN UPPER(type) = 'EXPENSE' THEN -amount
+                WHEN UPPER(t.type) = 'INCOME' THEN t.amount
+                WHEN UPPER(t.type) = 'EXPENSE' THEN -t.amount
                 ELSE 0
             END
         ) as net
-        FROM transactions
+        FROM transactions t
+        INNER JOIN wallets w ON t.walletId = w.id
+        WHERE w.excludeFromNet = 0
         GROUP BY date
         ORDER BY date ASC
     """)
@@ -171,15 +189,17 @@ interface TransactionDao {
 
     @Query("""
         SELECT 
-        strftime('%Y-W%W', datetime(timestamp / 1000, 'unixepoch', 'localtime')) as date,
+        strftime('%Y-W%W', datetime(t.timestamp / 1000, 'unixepoch', 'localtime')) as date,
         SUM(
             CASE 
-                WHEN UPPER(type) = 'INCOME' THEN amount
-                WHEN UPPER(type) = 'EXPENSE' THEN -amount
+                WHEN UPPER(t.type) = 'INCOME' THEN t.amount
+                WHEN UPPER(t.type) = 'EXPENSE' THEN -t.amount
                 ELSE 0
             END
         ) as net
-        FROM transactions
+        FROM transactions t
+        INNER JOIN wallets w ON t.walletId = w.id
+        WHERE w.excludeFromNet = 0
         GROUP BY date
         ORDER BY date ASC
     """)
@@ -193,15 +213,17 @@ interface TransactionDao {
 
     @Query("""
         SELECT 
-        strftime('%Y-%m', datetime(timestamp / 1000, 'unixepoch', 'localtime')) as date,
+        strftime('%Y-%m', datetime(t.timestamp / 1000, 'unixepoch', 'localtime')) as date,
         SUM(
             CASE 
-                WHEN UPPER(type) = 'INCOME' THEN amount
-                WHEN UPPER(type) = 'EXPENSE' THEN -amount
+                WHEN UPPER(t.type) = 'INCOME' THEN t.amount
+                WHEN UPPER(t.type) = 'EXPENSE' THEN -t.amount
                 ELSE 0
             END
         ) as net
-        FROM transactions
+        FROM transactions t
+        INNER JOIN wallets w ON t.walletId = w.id
+        WHERE w.excludeFromNet = 0
         GROUP BY date
         ORDER BY date ASC
     """)

@@ -210,7 +210,9 @@ class TransactionViewModel(
                     toWalletId = tx.toWalletId,
                     tags = tags.map { it.name },
                     tagIds = tags.map { it.id },
-                    note = tx.note
+                    note = tx.note,
+                    isCredit = tx.isCredit,
+                    hasSplits = repository.getSplitsForTransaction(tx.id).isNotEmpty()
                 )
             }
         }
@@ -218,6 +220,9 @@ class TransactionViewModel(
 
     fun getPersonCreditBalances(): Flow<List<com.example.testing.data.local.PersonCreditEntity>> = 
         repository.getPersonCreditBalances()
+
+    fun getPersonAngelBalances(): Flow<List<com.example.testing.data.local.PersonAngelEntity>> = 
+        repository.getPersonAngelBalances()
 
     private val _categorySummary: Flow<List<CategorySummary>> = repository.getCategorySummary()
 
@@ -267,7 +272,9 @@ class TransactionViewModel(
                         toWalletId = tx.toWalletId,
                         tags = tagNames,
                         tagIds = tagIds,
-                        note = tx.note
+                        note = tx.note,
+                        isCredit = tx.isCredit,
+                        hasSplits = repository.getSplitsForTransaction(tx.id).isNotEmpty()
                     )
                 )
             }
@@ -280,8 +287,9 @@ class TransactionViewModel(
     fun deleteTransaction(txId: Int) {
         viewModelScope.launch {
             val tx = repository.getTransactionById(txId) ?: return@launch
+            val splits = repository.getSplitsForTransaction(txId)
             
-            // Revert wallet balance
+            // Revert impacts
             when (tx.type) {
                 "INCOME" -> repository.updateWalletBalance(tx.walletId, -tx.amount)
                 "EXPENSE" -> repository.updateWalletBalance(tx.walletId, tx.amount)
@@ -290,14 +298,43 @@ class TransactionViewModel(
                     tx.toWalletId?.let { repository.updateWalletBalance(it, -tx.amount) }
                 }
             }
+            updateAngelBalanceForTransaction(tx, splits, isReverting = true)
 
-            // Revert Credit Balance if applicable
-            if (tx.isCredit && tx.personId != null) {
-                repository.delete(tx)
-                repository.recalculatePersonCredit(tx.personId)
-            } else {
-                repository.delete(tx)
+            repository.delete(tx)
+
+            // Recalculate
+            val allPeople = mutableSetOf<Int>()
+            tx.personId?.let { allPeople.add(it) }
+            splits.forEach { allPeople.add(it.personId) }
+
+            allPeople.forEach { personId ->
+                repository.recalculatePersonCredit(personId)
+                repository.recalculatePersonAngel(personId)
             }
+        }
+    }
+
+    private suspend fun updateAngelBalanceForTransaction(
+        tx: TransactionEntity,
+        splits: List<com.example.testing.data.local.TransactionSplitEntity>,
+        isReverting: Boolean
+    ) {
+        val angelWallet = repository.getWalletByName("ANGEL") ?: return
+        val multiplier = if (isReverting) -1.0 else 1.0
+        
+        var adjustment = 0.0
+        
+        // Splits: what OTHERS owe me / I spent on others
+        if (splits.isNotEmpty()) {
+            val splitSum = splits.sumOf { it.amount }
+            adjustment += splitSum
+        }
+        
+        // Note: Direct Credits (tx.isCredit) are NO LONGER added to ANGEL wallet balance
+        // because we are keeping Angel (generosity) and Credit (loans) separate.
+        
+        if (adjustment != 0.0) {
+            repository.updateWalletBalance(angelWallet.id, adjustment * multiplier)
         }
     }
 
@@ -320,48 +357,73 @@ class TransactionViewModel(
                 val delta = if (tx.type == "INCOME") tx.amount else -tx.amount
                 repository.updatePersonCredit(tx.personId, delta)
             }
+            
+            // Note: Full split restoration for ANGEL balance in 'restore' is omitted 
+            // as restore usually handles single entities from a recent undo.
         }
     }
 
     suspend fun getTransactionEntityById(id: Int): TransactionEntity? = repository.getTransactionById(id)
 
-    fun addTransaction(transaction: TransactionEntity, tagIds: List<Int> = emptyList()) {
+    fun addTransaction(transaction: TransactionEntity, tagIds: List<Int> = emptyList(), splits: List<com.example.testing.data.local.TransactionSplitEntity> = emptyList()) {
         viewModelScope.launch {
             Log.d("DB_DEBUG", "Inserting transaction: $transaction")
-            val txId = repository.insert(transaction)
-            Log.d("TAG_DEBUG", "Inserted Transaction ID: $txId")
+            
+            // Automatic ANGEL wallet selection for "Someone Else Paid"
+            // Note: isCredit is NO LONGER forced to true for ANGEL because splits go to PersonAngelEntity
+            val angelWallet = repository.getWalletByName("ANGEL")
+            val isSomeoneElsePaid = splits.isNotEmpty() && !splits.first().isLent
+            val txToSave = if (isSomeoneElsePaid && angelWallet != null && transaction.type == "EXPENSE") {
+                transaction.copy(walletId = angelWallet.id)
+            } else {
+                transaction
+            }
+
+            val txId = repository.insert(txToSave)
             
             // Update wallet balance
-            when (transaction.type) {
-                "EXPENSE" -> repository.updateWalletBalance(transaction.walletId, -transaction.amount)
-                "INCOME" -> repository.updateWalletBalance(transaction.walletId, transaction.amount)
+            when (txToSave.type) {
+                "EXPENSE" -> repository.updateWalletBalance(txToSave.walletId, -txToSave.amount)
+                "INCOME" -> repository.updateWalletBalance(txToSave.walletId, txToSave.amount)
                 "TRANSFER" -> {
-                    repository.updateWalletBalance(transaction.walletId, -transaction.amount)
-                    transaction.toWalletId?.let { 
-                        repository.updateWalletBalance(it, transaction.amount) 
-                    }
+                    repository.updateWalletBalance(txToSave.walletId, -txToSave.amount)
+                    txToSave.toWalletId?.let { repository.updateWalletBalance(it, txToSave.amount) }
                 }
             }
 
-            // Update Credit Balance if applicable
-            if (transaction.isCredit && transaction.personId != null) {
-                val delta = if (transaction.type == "INCOME") transaction.amount else -transaction.amount
-                repository.updatePersonCredit(transaction.personId, delta)
+            // Update ANGEL wallet social adjustments
+            updateAngelBalanceForTransaction(txToSave, splits, isReverting = false)
+
+            // Update Credit Balance (Only for direct loans/borrowing)
+            txToSave.personId?.let { repository.recalculatePersonCredit(it) }
+
+            // Handle Splits -> Now updates PersonAngel instead of PersonCredit
+            splits.forEach { split ->
+                val splitWithTxId = split.copy(transactionId = txId.toInt())
+                repository.insertSplit(splitWithTxId)
+                repository.recalculatePersonAngel(split.personId)
             }
 
             tagIds.forEach { tagId ->
-                Log.d("TAG_DEBUG", "Saving tagId=$tagId for txId=$txId")
                 repository.addTagToTransaction(txId, tagId)
             }
-            Log.d("DB_DEBUG", "Transaction and tags inserted successfully")
         }
     }
 
-    fun updateTransaction(updatedTx: TransactionEntity, newTagIds: List<Int>) {
+    fun updateTransaction(updatedTx: TransactionEntity, newTagIds: List<Int>, newSplits: List<com.example.testing.data.local.TransactionSplitEntity> = emptyList()) {
         viewModelScope.launch {
             val oldTx = repository.getTransactionById(updatedTx.id) ?: return@launch
+            val oldSplits = repository.getSplitsForTransaction(updatedTx.id)
 
-            // 1. Revert old transaction's impact on wallet
+            val angelWallet = repository.getWalletByName("ANGEL")
+            val isSomeoneElsePaid = newSplits.isNotEmpty() && !newSplits.first().isLent
+            val finalUpdatedTx = if (isSomeoneElsePaid && angelWallet != null && updatedTx.type == "EXPENSE") {
+                updatedTx.copy(walletId = angelWallet.id)
+            } else {
+                updatedTx
+            }
+
+            // Revert impacts
             when (oldTx.type) {
                 "INCOME" -> repository.updateWalletBalance(oldTx.walletId, -oldTx.amount)
                 "EXPENSE" -> repository.updateWalletBalance(oldTx.walletId, oldTx.amount)
@@ -370,39 +432,36 @@ class TransactionViewModel(
                     oldTx.toWalletId?.let { repository.updateWalletBalance(it, -oldTx.amount) }
                 }
             }
+            updateAngelBalanceForTransaction(oldTx, oldSplits, isReverting = true)
 
-            // 2. Revert old transaction's impact on credit
-            if (oldTx.isCredit && oldTx.personId != null) {
-                repository.recalculatePersonCredit(oldTx.personId)
-            }
+            // Update
+            repository.update(finalUpdatedTx)
+            repository.deleteTagsForTransaction(finalUpdatedTx.id)
+            newTagIds.forEach { repository.addTagToTransaction(finalUpdatedTx.id.toLong(), it) }
+            repository.deleteSplitsForTransaction(finalUpdatedTx.id)
+            newSplits.forEach { repository.insertSplit(it.copy(transactionId = finalUpdatedTx.id)) }
 
-            // 3. Update the transaction entity
-            repository.update(updatedTx)
-
-            // 4. Update tags
-            repository.deleteTagsForTransaction(updatedTx.id)
-            newTagIds.forEach { tagId ->
-                repository.addTagToTransaction(updatedTx.id.toLong(), tagId)
-            }
-
-            // 5. Apply new transaction's impact on wallet
-            when (updatedTx.type) {
-                "INCOME" -> repository.updateWalletBalance(updatedTx.walletId, updatedTx.amount)
-                "EXPENSE" -> repository.updateWalletBalance(updatedTx.walletId, -updatedTx.amount)
+            // Apply new impacts
+            when (finalUpdatedTx.type) {
+                "INCOME" -> repository.updateWalletBalance(finalUpdatedTx.walletId, finalUpdatedTx.amount)
+                "EXPENSE" -> repository.updateWalletBalance(finalUpdatedTx.walletId, -finalUpdatedTx.amount)
                 "TRANSFER" -> {
-                    repository.updateWalletBalance(updatedTx.walletId, -updatedTx.amount)
-                    updatedTx.toWalletId?.let { repository.updateWalletBalance(it, updatedTx.amount) }
+                    repository.updateWalletBalance(finalUpdatedTx.walletId, -finalUpdatedTx.amount)
+                    finalUpdatedTx.toWalletId?.let { repository.updateWalletBalance(it, finalUpdatedTx.amount) }
                 }
             }
+            updateAngelBalanceForTransaction(finalUpdatedTx, newSplits, isReverting = false)
 
-            // 6. Apply new transaction's impact on credit
-            if (updatedTx.isCredit && updatedTx.personId != null) {
-                repository.recalculatePersonCredit(updatedTx.personId)
-            }
-            
-            // If the person changed, recalculate the old person too
-            if (oldTx.personId != null && oldTx.personId != updatedTx.personId) {
-                repository.recalculatePersonCredit(oldTx.personId)
+            // Recalculate PersonAngel and PersonCredit for everyone
+            val allPersonIds = mutableSetOf<Int>()
+            oldTx.personId?.let { allPersonIds.add(it) }
+            finalUpdatedTx.personId?.let { allPersonIds.add(it) }
+            oldSplits.forEach { allPersonIds.add(it.personId) }
+            newSplits.forEach { allPersonIds.add(it.personId) }
+
+            allPersonIds.forEach { personId ->
+                repository.recalculatePersonCredit(personId)
+                repository.recalculatePersonAngel(personId)
             }
         }
     }

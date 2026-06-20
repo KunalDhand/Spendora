@@ -17,6 +17,9 @@ interface PersonCreditDao {
     @Query("SELECT * FROM person_credits WHERE personId = :personId")
     suspend fun getPersonCreditById(personId: Int): PersonCreditEntity?
 
+    @Query("DELETE FROM person_credits WHERE personId = :personId")
+    suspend fun deletePersonCreditById(personId: Int)
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertOrUpdate(personCredit: PersonCreditEntity)
 

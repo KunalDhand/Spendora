@@ -150,6 +150,7 @@ sealed class Screen(val route: String) {
     object Wallets : Screen("wallets")
     object Analysis : Screen("analysis")
     object Credits : Screen("credits")
+    object Angel : Screen("angel")
     object EditTransaction : Screen("edit_transaction/{transactionId}") {
         fun createRoute(id: Int) = "edit_transaction/$id"
     }
@@ -421,6 +422,33 @@ class MainActivity : ComponentActivity() {
                                 personViewModel = personViewModel,
                                 onNavigateBack = {
                                     navController.popBackStack()
+                                },
+                                onNavigateToAngel = {
+                                    navController.navigate(Screen.Angel.route) {
+                                        popUpTo(navController.graph.findStartDestination().id) {
+                                            saveState = true
+                                        }
+                                        launchSingleTop = true
+                                        restoreState = true
+                                    }
+                                }
+                            )
+                        }
+                        composable(Screen.Angel.route) {
+                            AngelScreen(
+                                transactionViewModel = txViewModel,
+                                personViewModel = personViewModel,
+                                onNavigateBack = {
+                                    navController.popBackStack()
+                                },
+                                onSwitchToCredit = {
+                                    navController.navigate(Screen.Credits.route) {
+                                        popUpTo(navController.graph.findStartDestination().id) {
+                                            saveState = true
+                                        }
+                                        launchSingleTop = true
+                                        restoreState = true
+                                    }
                                 }
                             )
                         }

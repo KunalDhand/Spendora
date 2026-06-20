@@ -26,8 +26,9 @@ object DatabaseProvider {
                         CoroutineScope(Dispatchers.IO).launch {
                             val database = getDatabase(context)
                             
-                            // Default Wallet
+                            // Default Wallets
                             database.walletDao().insert(WalletEntity(name = "Cash", type = "CASH", balance = 0.0, isDefault = true))
+                            database.walletDao().insert(WalletEntity(name = "ANGEL", type = "OTHER", balance = 0.0, isDefault = false, excludeFromNet = true))
                             
                             // Default Categories
                             database.categoryDao().insert(CategoryEntity(name = "Food"))

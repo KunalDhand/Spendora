@@ -14,5 +14,6 @@ data class WalletEntity(
     val name: String,
     val type: String = "OTHER",
     val balance: Double = 0.0,
-    val isDefault: Boolean = false
+    val isDefault: Boolean = false,
+    val excludeFromNet: Boolean = false
 )

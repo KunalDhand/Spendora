@@ -11,6 +11,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.List
+import androidx.compose.material.icons.filled.Handshake
+import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
@@ -660,12 +662,29 @@ fun TransactionItem(tx: TransactionUI) {
 
                 // RIGHT SIDE: Financial Info
                 Column(horizontalAlignment = Alignment.End) {
-                    Text(
-                        text = "${if (tx.type == "EXPENSE") "-" else "+"} ₹${tx.amount}",
-                        color = if (tx.type == "EXPENSE") getExpenseColor() else getIncomeColor(),
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
-                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (tx.isCredit) {
+                            Icon(
+                                imageVector = Icons.Default.Handshake,
+                                contentDescription = "Credit",
+                                modifier = Modifier.size(14.dp).padding(end = 4.dp),
+                                tint = if (tx.type == "EXPENSE") getExpenseColor() else getIncomeColor()
+                            )
+                        } else if (tx.hasSplits) {
+                            Icon(
+                                imageVector = Icons.Default.Favorite,
+                                contentDescription = "Split",
+                                modifier = Modifier.size(14.dp).padding(end = 4.dp),
+                                tint = if (tx.type == "EXPENSE") getExpenseColor() else getIncomeColor()
+                            )
+                        }
+                        Text(
+                            text = "${if (tx.type == "EXPENSE") "-" else "+"} ₹${tx.amount}",
+                            color = if (tx.type == "EXPENSE") getExpenseColor() else getIncomeColor(),
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
 
                     Text(
                         text = tx.date,

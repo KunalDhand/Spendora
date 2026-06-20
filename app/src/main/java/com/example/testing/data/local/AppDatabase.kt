@@ -11,9 +11,11 @@ import androidx.room.RoomDatabase
         PersonEntity::class,
         TagEntity::class,
         TransactionTagCrossRef::class,
-        PersonCreditEntity::class
+        PersonCreditEntity::class,
+        TransactionSplitEntity::class,
+        PersonAngelEntity::class
     ],
-    version = 7
+    version = 10
 )
 abstract class AppDatabase : RoomDatabase() {
 
@@ -23,4 +25,6 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun personDao(): PersonDao
     abstract fun tagDao(): TagDao
     abstract fun personCreditDao(): PersonCreditDao
+    abstract fun transactionSplitDao(): TransactionSplitDao
+    abstract fun personAngelDao(): PersonAngelDao
 }

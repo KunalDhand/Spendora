@@ -15,10 +15,15 @@ object PrepopulateData {
         // Clean up duplicates for Wallets
         walletDao.removeDuplicateWallets()
 
-        // Ensure default Wallet exists
-        if (walletDao.getWalletCount() == 0) {
-            Log.d("DB_DEBUG", "No wallets found. Prepopulating default wallet...")
+        // Ensure default Wallets exist
+        val existingWallets = walletDao.getAllWalletsOnce()
+        if (existingWallets.none { it.name.equals("Cash", ignoreCase = true) }) {
+            Log.d("DB_DEBUG", "Prepopulating Cash wallet...")
             walletDao.insert(WalletEntity(name = "Cash", type = "CASH", balance = 0.0, isDefault = true))
+        }
+        if (existingWallets.none { it.name.equals("ANGEL", ignoreCase = true) }) {
+            Log.d("DB_DEBUG", "Prepopulating ANGEL wallet...")
+            walletDao.insert(WalletEntity(name = "ANGEL", type = "OTHER", balance = 0.0, isDefault = false, excludeFromNet = true))
         }
 
         // 1. Rename old categories if they exist

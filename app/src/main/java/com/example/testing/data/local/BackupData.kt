@@ -10,6 +10,8 @@ data class BackupData(
     @SerializedName("tags") val tags: List<TagEntity>,
     @SerializedName("tag_cross_refs") val tagCrossRefs: List<TransactionTagCrossRef>,
     @SerializedName("person_credits") val personCredits: List<PersonCreditEntity>,
+    @SerializedName("person_angel_balances") val personAngelBalances: List<PersonAngelEntity>,
+    @SerializedName("transaction_splits") val transactionSplits: List<TransactionSplitEntity>,
     @SerializedName("export_timestamp") val exportTimestamp: Long = System.currentTimeMillis(),
     @SerializedName("version") val version: Int = 1
 )
